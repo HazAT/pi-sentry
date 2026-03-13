@@ -1,8 +1,8 @@
 # pi-sentry-monitor
 
-Sentry AI Monitoring extension for [pi coding agent](https://github.com/nichochar/pi) sessions and tool calls.
+Sentry AI Monitoring extension for [pi coding agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) sessions and tool calls.
 
-Mirrors what [opencode-sentry-monitor](https://github.com/getsentry/opencode-sentry-monitor) does for OpenCode — tracks agent sessions, tool executions, token usage, and errors as Sentry traces.
+Mirrors what [opencode-sentry-monitor](https://github.com/stolinski/opencode-sentry-monitor) does for OpenCode — tracks agent sessions, tool executions, token usage, and errors as Sentry traces.
 
 ## Trace Hierarchy
 
