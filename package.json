@@ -6,7 +6,8 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "pi": {
-    "extensions": ["dist/index.js"]
+    "extensions": ["dist/index.js"],
+    "skills": ["skills"]
   },
   "exports": {
     ".": {
@@ -16,6 +17,7 @@
   },
   "files": [
     "dist",
+    "skills",
     "README.md",
     "LICENSE"
   ],
@@ -26,6 +28,7 @@
   },
   "keywords": [
     "pi",
+    "pi-package",
     "extension",
     "sentry",
     "observability",

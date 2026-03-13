@@ -17,15 +17,19 @@ gen_ai.invoke_agent (session span)
 
 ## Installation
 
+**Global** (applies to all projects):
 ```bash
-npm install pi-sentry-monitor
+pi install npm:pi-sentry-monitor
 ```
 
-Then symlink into your project's extensions directory:
-
+**Project-local** (checked into the repo, shared with teammates):
 ```bash
-ln -s node_modules/pi-sentry-monitor .pi/extensions/pi-sentry-monitor
+pi install npm:pi-sentry-monitor -l
 ```
+
+Then run `/reload` in pi to activate without restarting.
+
+A companion skill is included — once installed, ask pi to "set up Sentry monitoring" and it will walk through creating a Sentry project, configuring the DSN, and verifying traces are flowing.
 
 ## Configuration
 
@@ -95,12 +99,14 @@ Create `.pi/sentry-monitor.json` (or `.jsonc`) in your project:
 ## Development
 
 ```bash
-git clone <repo> && cd pi-sentry-monitor
+git clone https://github.com/sergical/pi-sentry-monitor && cd pi-sentry-monitor
 npm install
 npm run build
 
-# Symlink into a project for testing
-ln -s $(pwd) /path/to/project/.pi/extensions/pi-sentry-monitor
+# Install local copy for testing
+pi install ./path/to/pi-sentry-monitor
+# or test without installing (ephemeral)
+pi -e ./dist/index.js
 ```
 
 ## License
