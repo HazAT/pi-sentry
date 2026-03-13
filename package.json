@@ -1,0 +1,48 @@
+{
+  "name": "pi-sentry-monitor",
+  "version": "0.1.0",
+  "description": "Sentry AI Monitoring extension for pi coding agent sessions and tool calls",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "pi": {
+    "extensions": ["dist/index.js"]
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run build"
+  },
+  "keywords": [
+    "pi",
+    "extension",
+    "sentry",
+    "observability",
+    "ai-monitoring"
+  ],
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "dependencies": {
+    "@sentry/node": "^10.23.0",
+    "strip-json-comments": "^5.0.1"
+  },
+  "devDependencies": {
+    "@mariozechner/pi-coding-agent": "latest",
+    "@mariozechner/pi-ai": "latest",
+    "@types/node": "^22.13.10",
+    "typescript": "^5.8.2"
+  }
+}
