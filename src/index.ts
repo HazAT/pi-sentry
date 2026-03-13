@@ -56,6 +56,12 @@ function getAgentName(config: ResolvedPluginConfig, projectName: string): string
     return config.agentName;
   }
 
+  // When spawned as a named subagent, pi-subagents sets PI_AGENT_NAME
+  const envAgentName = process.env.PI_AGENT_NAME?.trim();
+  if (envAgentName) {
+    return `${projectName}/${envAgentName}`;
+  }
+
   return projectName;
 }
 
