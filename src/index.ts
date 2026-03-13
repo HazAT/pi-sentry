@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import * as Sentry from "@sentry/node";
-import { basename } from "node:path";
+import { basename, dirname } from "node:path";
 import { loadPluginConfig, type PluginLogger, type ResolvedPluginConfig } from "./config.js";
 import { serializeAttribute } from "./serialize.js";
 
@@ -51,15 +51,45 @@ function getProjectName(config: ResolvedPluginConfig, cwd: string): string {
   return guessed.length > 0 ? guessed : "pi-project";
 }
 
+/**
+ * Detects the subagent name from CLI args when spawned by pi-subagents.
+ *
+ * pi-subagents writes each agent's system prompt to a temp file named
+ * `{agent}.md` inside a `pi-subagent-XXXX/` directory, then passes it
+ * as `--append-system-prompt /tmp/pi-subagent-XXXX/worker.md`. The agent
+ * name is therefore recoverable from process.argv without any changes to
+ * pi-subagents.
+ */
+function detectSubagentName(): string | undefined {
+  const args = process.argv;
+  for (let i = 0; i < args.length - 1; i++) {
+    if (args[i] !== "--append-system-prompt") continue;
+    const promptPath = args[i + 1];
+    if (!promptPath) continue;
+
+    // Only trust paths inside a pi-subagent-* temp dir (written by pi-subagents)
+    const dirName = basename(dirname(promptPath));
+    if (!dirName.startsWith("pi-subagent-")) continue;
+
+    const fileName = basename(promptPath);
+    const agentName = fileName.endsWith(".md") ? fileName.slice(0, -3) : fileName;
+
+    // Agent names are word chars, dots, and hyphens (matches the sanitizer in pi-subagents)
+    if (/^[\w.-]+$/.test(agentName) && agentName.length > 0) {
+      return agentName;
+    }
+  }
+  return undefined;
+}
+
 function getAgentName(config: ResolvedPluginConfig, projectName: string): string {
   if (config.agentName && config.agentName.length > 0) {
     return config.agentName;
   }
 
-  // When spawned as a named subagent, pi-subagents sets PI_AGENT_NAME
-  const envAgentName = process.env.PI_AGENT_NAME?.trim();
-  if (envAgentName) {
-    return `${projectName}/${envAgentName}`;
+  const subagentName = detectSubagentName();
+  if (subagentName) {
+    return `${projectName}/${subagentName}`;
   }
 
   return projectName;
