@@ -406,13 +406,15 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         },
       });
 
-      // Record the user prompt that triggered this request
+      // Record the user prompt that triggered this request, then consume it
+      // so subsequent calls within the same turn don't inherit the stale value.
       if (config.recordInputs && lastUserPrompt) {
         const inputMessages = JSON.stringify([{ role: "user", content: lastUserPrompt }]);
         requestSpan.setAttribute(
           "gen_ai.input.messages",
           serializeAttribute(inputMessages, config.maxAttributeLength),
         );
+        lastUserPrompt = undefined;
       }
 
       requestSpans.set(timestamp, requestSpan);
@@ -472,13 +474,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
       attachTokenUsage(usageSpan, msg.usage);
 
-      // Record user prompt (in case message_start didn't fire or prompt came after)
+      // Record user prompt (in case message_start didn't fire or prompt came after).
+      // Consume it immediately so subsequent LLM calls within the same turn
+      // (responding to tool results) don't inherit the stale prompt.
       if (config.recordInputs && lastUserPrompt) {
         const inputMessages = JSON.stringify([{ role: "user", content: lastUserPrompt }]);
         usageSpan.setAttribute(
           "gen_ai.input.messages",
           serializeAttribute(inputMessages, config.maxAttributeLength),
         );
+        lastUserPrompt = undefined;
       }
 
       // Record assistant output on the request span
