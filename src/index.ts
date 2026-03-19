@@ -210,6 +210,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   const requestSpans = new Map<number, SentrySpan>(); // keyed by message timestamp
   const completedMessages = new Set<number>(); // track by timestamp to avoid dupe usage spans
   let lastUserPrompt: string | undefined;
+  let lastAssistantResponse: string | undefined;
 
   // Conversation tracking — links turns within the same session
   let sessionId: string | undefined;     // from pi's session manager, set on session_start
@@ -263,10 +264,28 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     for (const [key, span] of requestSpans) {
       if (modelId !== "unknown") {
         span.setAttribute("gen_ai.request.model", modelId);
+        span.setAttribute("gen_ai.response.model", modelId);
         span.setAttribute("pi.model.provider", providerId);
       }
       span.end();
       requestSpans.delete(key);
+    }
+
+    // Stamp the invoke_agent span with the final model and assistant response
+    // before ending.  The model may have been "unknown" at span creation time
+    // if model_select fired after the span was opened.
+    if (sessionSpan) {
+      if (modelId !== "unknown") {
+        sessionSpan.setAttribute("gen_ai.request.model", modelId);
+        sessionSpan.setAttribute("gen_ai.response.model", modelId);
+        sessionSpan.setAttribute("pi.model.provider", providerId);
+      }
+      if (config.recordOutputs && lastAssistantResponse) {
+        sessionSpan.setAttribute(
+          "gen_ai.response.text",
+          serializeAttribute(lastAssistantResponse, config.maxAttributeLength),
+        );
+      }
     }
 
     sessionSpan?.end();
@@ -421,6 +440,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       previousTraceId = sessionSpan.spanContext().traceId;
       cleanupSession();
     }
+    lastAssistantResponse = undefined;
     turnHadToolCalls = false;
   });
 
@@ -507,6 +527,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         requestSpans.delete(msg.timestamp);
         // Update model name now that we have the confirmed value
         usageSpan.setAttribute("gen_ai.request.model", msg.model);
+        usageSpan.setAttribute("gen_ai.response.model", msg.model);
         usageSpan.setAttribute("pi.model.provider", msg.provider);
         usageSpan.updateName(`request ${msg.model}`);
       } else {
@@ -518,6 +539,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           attributes: {
             "gen_ai.operation.name": "request",
             "gen_ai.request.model": msg.model,
+            "gen_ai.response.model": msg.model,
             "gen_ai.agent.name": agentName,
             "pi.model.provider": msg.provider,
             "pi.project.name": projectName,
@@ -537,13 +559,14 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         );
       }
 
-      // Record assistant output on the request span
+      // Record assistant output on the request span and track for invoke_agent
       if (config.recordOutputs && msg.content) {
         const textContent = msg.content
           .filter((c): c is { type: "text"; text: string } => (c as any).type === "text" && typeof (c as any).text === "string")
           .map((c) => c.text)
           .join("\n");
         if (textContent.length > 0) {
+          lastAssistantResponse = textContent;
           usageSpan.setAttribute(
             "gen_ai.response.text",
             serializeAttribute(textContent, config.maxAttributeLength),

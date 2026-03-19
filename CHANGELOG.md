@@ -2,6 +2,20 @@
 
 All notable changes to `pi-sentry-monitor` are documented here.
 
+## [0.1.11] - 2026-03-19
+
+### Fixed
+- **Model "unknown" on invoke_agent spans** — the root `gen_ai.invoke_agent`
+  span now gets stamped with the final known model (`gen_ai.request.model` and
+  `gen_ai.response.model`) before ending, fixing the "unknown" label in Sentry
+  regardless of `model_select` event timing.
+- **Missing response on invoke_agent spans** — the agent span now carries
+  `gen_ai.response.text` with the last assistant response, so Sentry's AI
+  Spans view shows both Input and Output on the root span.
+- **`gen_ai.response.model` missing on request spans** — all `gen_ai.request`
+  child spans now set `gen_ai.response.model` alongside `gen_ai.request.model`,
+  aligning with the Sentry AI Agent Monitoring conventions.
+
 ## [0.1.5] - 2026-03-13
 
 ### Changed
