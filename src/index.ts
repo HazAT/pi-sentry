@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import * as Sentry from "@sentry/node";
+import { randomUUID } from "node:crypto";
 import { basename, dirname } from "node:path";
 import { loadPluginConfig, type PluginLogger, type ResolvedPluginConfig } from "./config.js";
 import { serializeAttribute } from "./serialize.js";
@@ -194,6 +195,12 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   const completedMessages = new Set<number>(); // track by timestamp to avoid dupe usage spans
   let lastUserPrompt: string | undefined;
 
+  // Conversation tracking — links turns within the same session
+  let sessionId: string | undefined;     // from pi's session manager, set on session_start
+  let conversationId = randomUUID();     // stable ID across turns; reset on session switch
+  let turnIndex = 0;                     // incremented on turn_start
+  let previousTraceId: string | undefined; // trace ID of the previous turn for linking
+
   function ensureSessionSpan(): SentrySpan {
     if (sessionSpan) {
       return sessionSpan;
@@ -210,6 +217,13 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         "pi.model.provider": providerId,
         "pi.project.name": projectName,
         "pi.capture.session_events": config.includeSessionEvents,
+        // Conversation tracking
+        "gen_ai.conversation.id": conversationId,
+        "pi.turn.index": turnIndex,
+        ...(sessionId ? { "pi.session.id": sessionId } : {}),
+        ...(lastUserPrompt && config.recordInputs ? {
+          "gen_ai.prompt": serializeAttribute(lastUserPrompt, config.maxAttributeLength),
+        } : {}),
         ...config.tags,
       },
     });
@@ -241,15 +255,23 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     completedMessages.clear();
   }
 
-  // --- session_start: create root gen_ai.invoke_agent span ---
-  pi.on("session_start", () => {
+  // --- session_start: capture session ID ---
+  pi.on("session_start", (_event, ctx) => {
     try {
+      sessionId = ctx.sessionManager.getSessionId();
       ensureSessionSpan();
     } catch (error) {
       logger.warn("Failed to create session span", {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  });
+
+  // --- session_switch: reset conversation ID on session change ---
+  pi.on("session_switch", () => {
+    conversationId = randomUUID();
+    turnIndex = 0;
+    previousTraceId = undefined;
   });
 
   // --- session_shutdown: final cleanup ---
@@ -549,6 +571,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
   });
 
+  // --- turn_start: track turn index ---
+  pi.on("turn_start", (event) => {
+    turnIndex = event.turnIndex;
+  });
+
   // --- turn_end: end the root span and flush per-turn ---
   // The Sentry SpanExporter only sends child spans when their root span ends.
   // We end the root invoke_agent span at the end of every turn so each turn
@@ -561,6 +588,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   // the agent_end handler completes.
   pi.on("turn_end", async () => {
     try {
+      // Capture trace ID before ending, so the next turn can link back
+      if (sessionSpan) {
+        previousTraceId = sessionSpan.spanContext().traceId;
+      }
+
       cleanupSession();
       await Sentry.flush(5000);
     } catch (error) {
