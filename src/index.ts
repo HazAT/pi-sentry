@@ -218,11 +218,13 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         "pi.project.name": projectName,
         "pi.capture.session_events": config.includeSessionEvents,
         // Conversation tracking
-        "gen_ai.conversation.id": conversationId,
         "pi.turn.index": turnIndex,
         ...(sessionId ? { "pi.session.id": sessionId } : {}),
         ...(lastUserPrompt && config.recordInputs ? {
-          "gen_ai.prompt": serializeAttribute(lastUserPrompt, config.maxAttributeLength),
+          "gen_ai.request.messages": serializeAttribute(
+            JSON.stringify([{ role: "user", content: lastUserPrompt }]),
+            config.maxAttributeLength,
+          ),
         } : {}),
         ...config.tags,
       },
@@ -255,10 +257,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     completedMessages.clear();
   }
 
-  // --- session_start: capture session ID ---
+  // --- session_start: capture session ID and set conversation ---
   pi.on("session_start", (_event, ctx) => {
     try {
       sessionId = ctx.sessionManager.getSessionId();
+      Sentry.setConversationId(conversationId);
       ensureSessionSpan();
     } catch (error) {
       logger.warn("Failed to create session span", {
@@ -272,6 +275,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     conversationId = randomUUID();
     turnIndex = 0;
     previousTraceId = undefined;
+    Sentry.setConversationId(conversationId);
   });
 
   // --- session_shutdown: final cleanup ---
@@ -401,7 +405,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
   });
 
-  // --- input: capture user prompt for gen_ai.input.messages ---
+  // --- input: capture user prompt for gen_ai.request.messages ---
   pi.on("input", (event) => {
     if (typeof event.text === "string") {
       lastUserPrompt = event.text;
@@ -450,7 +454,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       if (config.recordInputs && lastUserPrompt) {
         const inputMessages = JSON.stringify([{ role: "user", content: lastUserPrompt }]);
         requestSpan.setAttribute(
-          "gen_ai.input.messages",
+          "gen_ai.request.messages",
           serializeAttribute(inputMessages, config.maxAttributeLength),
         );
       }
@@ -516,7 +520,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       if (config.recordInputs && lastUserPrompt) {
         const inputMessages = JSON.stringify([{ role: "user", content: lastUserPrompt }]);
         usageSpan.setAttribute(
-          "gen_ai.input.messages",
+          "gen_ai.request.messages",
           serializeAttribute(inputMessages, config.maxAttributeLength),
         );
       }
