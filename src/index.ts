@@ -109,6 +109,22 @@ function initSentry(config: ResolvedPluginConfig, logger: PluginLogger): void {
       release: config.release,
       debug: config.debug,
       sendDefaultPii: false,
+      // Disable built-in AI integrations — pi-sentry-monitor creates its own
+      // gen_ai spans with richer context (agent name, conversation ID, tool
+      // I/O).  The auto-instrumented spans can't find the active invoke_agent
+      // span (it's inactive/event-driven), so they'd create orphan traces
+      // with duplicate data.
+      integrations: (defaults) =>
+        defaults.filter(
+          (i) =>
+            ![
+              "Anthropic_AI",
+              "OpenAI",
+              "LangChain",
+              "VercelAI",
+              "Google_GenAI",
+            ].includes(i.name),
+        ),
     });
 
     sentryInitialized = true;
