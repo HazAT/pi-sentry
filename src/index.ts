@@ -216,6 +216,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   let conversationId = randomUUID();     // stable ID across turns; reset on session switch
   let turnIndex = 0;                     // incremented on turn_start
   let previousTraceId: string | undefined; // trace ID of the previous turn for linking
+  let turnHadToolCalls = false;            // tracks if current turn had tool executions
 
   function ensureSessionSpan(): SentrySpan {
     if (sessionSpan) {
@@ -331,6 +332,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   // --- tool_execution_start: start gen_ai.execute_tool span ---
   pi.on("tool_execution_start", (event) => {
+    turnHadToolCalls = true;
     try {
       const parentSpan = ensureSessionSpan();
 
@@ -384,20 +386,6 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
       setSpanStatus(span, event.isError);
 
-      if (event.isError) {
-        Sentry.captureMessage(`Tool execution error: ${event.toolName}`, {
-          level: "error",
-          tags: {
-            "pi.tool_call.id": event.toolCallId,
-            "pi.tool": event.toolName,
-            ...config.tags,
-          },
-          extra: {
-            result: event.result,
-          },
-        });
-      }
-
       span.end();
       toolSpans.delete(event.toolCallId);
 
@@ -422,10 +410,18 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   });
 
   // --- input: capture user prompt for gen_ai.request.messages ---
+  // Also ends the previous interaction's span if it was kept alive across
+  // tool-use turns, so the new interaction starts a fresh trace.
   pi.on("input", (event) => {
     if (typeof event.text === "string") {
       lastUserPrompt = event.text;
     }
+    // End the previous interaction's span if still open
+    if (sessionSpan) {
+      previousTraceId = sessionSpan.spanContext().traceId;
+      cleanupSession();
+    }
+    turnHadToolCalls = false;
   });
 
   // --- message_start: open gen_ai.request span so we capture real LLM latency ---
@@ -596,19 +592,26 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     turnIndex = event.turnIndex;
   });
 
-  // --- turn_end: end the root span and flush per-turn ---
+  // --- turn_end: conditionally end the root span and flush ---
   // The Sentry SpanExporter only sends child spans when their root span ends.
-  // We end the root invoke_agent span at the end of every turn so each turn
-  // becomes a self-contained trace with all its tool calls and LLM requests.
   //
-  // This MUST happen in turn_end (not agent_end) because turn_end fires
-  // DURING the agent loop while agent.prompt() is still running.  agent_end
-  // fires after agent.prompt() resolves, and print mode's session.prompt()
-  // does not await the extension event queue — the process can exit before
-  // the agent_end handler completes.
+  // If this turn had tool calls, the LLM will respond again in a new turn
+  // (tool results → follow-up response).  Keep the session span alive so the
+  // entire interaction (LLM → tools → LLM → … → final text) stays in one
+  // trace.  Only end and flush when the turn had NO tool calls — that means
+  // the LLM produced a final text response and is waiting for user input.
+  //
+  // The `input` handler also ends the span as a safety net, ensuring no
+  // span leaks across user interactions.
   pi.on("turn_end", async () => {
+    if (turnHadToolCalls) {
+      // More turns coming — keep the span alive for the follow-up LLM response
+      turnHadToolCalls = false;
+      return;
+    }
+
     try {
-      // Capture trace ID before ending, so the next turn can link back
+      // Final text response turn — end the span and flush
       if (sessionSpan) {
         previousTraceId = sessionSpan.spanContext().traceId;
       }
@@ -620,6 +623,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+    turnHadToolCalls = false;
   });
 
   // --- agent_end: breadcrumb only (flush already happened in turn_end) ---
