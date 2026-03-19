@@ -252,7 +252,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
   });
 
-  // --- session_shutdown: end span, flush ---
+  // --- session_shutdown: final cleanup ---
   pi.on("session_shutdown", async () => {
     try {
       cleanupSession();
@@ -262,6 +262,12 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         error: error instanceof Error ? error.message : String(error),
       });
     }
+  });
+
+  // Safety net: flush on process exit in case session_shutdown never fires
+  // (e.g. print mode, SIGKILL, unhandled crash).
+  process.on("beforeExit", () => {
+    cleanupSession();
   });
 
   // --- model_select: track current model ---
@@ -543,7 +549,28 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
   });
 
-  // --- agent_end: flush pending data ---
+  // --- turn_end: end the root span and flush per-turn ---
+  // The Sentry SpanExporter only sends child spans when their root span ends.
+  // We end the root invoke_agent span at the end of every turn so each turn
+  // becomes a self-contained trace with all its tool calls and LLM requests.
+  //
+  // This MUST happen in turn_end (not agent_end) because turn_end fires
+  // DURING the agent loop while agent.prompt() is still running.  agent_end
+  // fires after agent.prompt() resolves, and print mode's session.prompt()
+  // does not await the extension event queue — the process can exit before
+  // the agent_end handler completes.
+  pi.on("turn_end", async () => {
+    try {
+      cleanupSession();
+      await Sentry.flush(5000);
+    } catch (error) {
+      logger.warn("Failed to flush on turn_end", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  });
+
+  // --- agent_end: breadcrumb only (flush already happened in turn_end) ---
   pi.on("agent_end", async () => {
     try {
       if (config.includeSessionEvents) {
@@ -553,9 +580,8 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           message: "agent_end",
         });
       }
-      await Sentry.flush(5000);
     } catch (error) {
-      logger.warn("Failed to flush on agent_end", {
+      logger.warn("Failed to add agent_end breadcrumb", {
         error: error instanceof Error ? error.message : String(error),
       });
     }

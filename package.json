@@ -1,6 +1,6 @@
 {
   "name": "pi-sentry-monitor",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "Sentry AI Monitoring extension for pi coding agent sessions and tool calls",
   "type": "module",
   "main": "./dist/index.js",
@@ -47,8 +47,8 @@
     "strip-json-comments": "^5.0.1"
   },
   "devDependencies": {
-    "@mariozechner/pi-coding-agent": "latest",
     "@mariozechner/pi-ai": "latest",
+    "@mariozechner/pi-coding-agent": "^0.60.0",
     "@types/node": "^22.13.10",
     "typescript": "^5.8.2"
   }
