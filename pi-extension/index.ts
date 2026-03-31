@@ -157,8 +157,14 @@ function attachTokenUsage(
     totalTokens: number;
   },
 ): void {
-  if (typeof usage.input === "number") {
-    span.setAttribute("gen_ai.usage.input_tokens", usage.input);
+  // gen_ai.usage.input_tokens must be TOTAL input tokens per OTel semantic conventions.
+  // Pi's usage.input only contains non-cached tokens (Anthropic's input_tokens field),
+  // so we add cache_read + cache_write to get the true total.
+  // Sentry's cost formula computes: uncached = input_tokens - cached, so if we only
+  // report non-cached here, the subtraction goes negative → negative cost.
+  const totalInputTokens = (usage.input ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+  if (totalInputTokens > 0) {
+    span.setAttribute("gen_ai.usage.input_tokens", totalInputTokens);
   }
   if (typeof usage.output === "number") {
     span.setAttribute("gen_ai.usage.output_tokens", usage.output);
