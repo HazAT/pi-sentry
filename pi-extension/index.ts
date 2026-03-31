@@ -7,7 +7,6 @@ import { createSentryCLI } from "./sentry-cli.js";
 import * as Sentry from "@sentry/node-core/light";
 import { initWithoutDefaultIntegrations, type LightNodeClient } from "@sentry/node-core/light";
 import { setConversationId } from "@sentry/core";
-import { randomUUID } from "node:crypto";
 import { basename, dirname } from "node:path";
 import { loadPluginConfig, type PluginLogger, type ResolvedPluginConfig } from "./config.js";
 import { serializeAttribute } from "./serialize.js";
@@ -394,8 +393,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   let statusFlashTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Conversation tracking — links turns within the same session
-  let sessionId: string | undefined;     // from pi's session manager, set on session_start
-  let conversationId = randomUUID();     // stable ID across turns; reset on session switch
+  let sessionId: string | undefined;     // from pi's session manager, used as conversation ID
   let turnIndex = 0;                     // incremented on turn_start
   let previousTraceId: string | undefined; // trace ID of the previous turn for linking
   let turnHadToolCalls = false;            // tracks if current turn had tool executions
@@ -498,7 +496,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     try {
       sessionId = ctx.sessionManager.getSessionId();
-      setConversationId(conversationId);
+      setConversationId(sessionId);
       ensureSessionSpan();
       Sentry.startSession();
       uiContext = ctx.ui;
@@ -528,11 +526,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   });
 
   // --- session_switch: reset conversation ID on session change ---
-  pi.on("session_switch", () => {
-    conversationId = randomUUID();
+  pi.on("session_switch", (_event, ctx) => {
+    sessionId = ctx.sessionManager.getSessionId();
     turnIndex = 0;
     previousTraceId = undefined;
-    setConversationId(conversationId);
+    setConversationId(sessionId);
   });
 
   // --- session_shutdown: final cleanup ---
