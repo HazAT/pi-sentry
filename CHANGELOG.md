@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to `pi-sentry-monitor` are documented here.
+All notable changes to the Sentry extension are documented here.
 
 ## [0.1.11] - 2026-03-19
 
@@ -48,12 +48,12 @@ All notable changes to `pi-sentry-monitor` are documented here.
 ## [0.1.2] - 2026-03-13
 
 ### Fixed
-- Corrected broken links in README for pi and opencode-sentry-monitor.
+- Corrected broken links in README.
 
 ## [0.1.1] - 2026-03-13
 
 ### Added
-- **Interactive setup skill** — `pi-sentry-monitor` skill now walks through
+- **Interactive setup skill** — the Sentry skill now walks through
   configuration interactively, collecting DSN, scope, agent/project name,
   developer tag, environment, and sample rate.
 - **Auto-detection** — skill auto-detects project name from `basename(cwd)`
@@ -68,7 +68,7 @@ All notable changes to `pi-sentry-monitor` are documented here.
   input messages, and completion text.
 - `gen_ai.execute_tool` spans for every tool call with inputs and outputs.
 - Token usage metrics (`gen_ai.usage.*`) on every request span.
-- Configurable via `sentry-monitor.json` / `pi-sentry-monitor.json` in
-  `.pi/` (project) or `~/.pi/agent/` (global), with env var overrides.
+- Configurable via `sentry.json` in `.pi/` (project) or `~/.pi/agent/`
+  (global), with env var overrides.
 - `recordInputs` / `recordOutputs` flags to control PII capture.
 - Optional Sentry metrics (`enableMetrics`) for token usage distributions.

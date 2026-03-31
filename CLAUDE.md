@@ -1,4 +1,4 @@
-# pi-sentry
+# Sentry Extension
 
 Sentry observability extension for [pi](https://github.com/badlogic/pi-mono). Instruments agent sessions as distributed traces and provides a `sentry` tool for querying Sentry data.
 
@@ -11,7 +11,7 @@ pi-extension/          ← TypeScript source (extension + sentry CLI wrapper)
   sentry-cli.ts        ← Thin wrapper: runs `npx sentry@latest <command>`
   serialize.ts         ← Attribute redaction/truncation
 skills/                ← Auto-discovered via package.json "pi.skills"
-  pi-sentry-monitor/   ← Setup wizard skill
+  sentry/              ← Setup wizard skill
   sentry-cli/          ← Teaches agents to use the sentry tool
 scripts/               ← Utility scripts
 ```

@@ -1,8 +1,8 @@
-# pi-sentry-monitor
+# Sentry Extension
 
 Sentry AI Monitoring extension for [pi coding agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) sessions and tool calls.
 
-Mirrors what [opencode-sentry-monitor](https://github.com/stolinski/opencode-sentry-monitor) does for OpenCode — tracks agent sessions, tool executions, token usage, and errors as Sentry traces.
+Tracks agent sessions, tool executions, token usage, and errors as Sentry traces.
 
 ## Trace Hierarchy
 
@@ -19,12 +19,12 @@ gen_ai.invoke_agent (session span)
 
 **Global** (applies to all projects):
 ```bash
-pi install npm:pi-sentry-monitor
+pi install npm:pi-sentry
 ```
 
 **Project-local** (checked into the repo, shared with teammates):
 ```bash
-pi install npm:pi-sentry-monitor -l
+pi install npm:pi-sentry -l
 ```
 
 Then run `/reload` in pi to activate without restarting.
@@ -44,8 +44,8 @@ Create `.pi/sentry.json` (or `.jsonc`) in your project:
 ### Config File Locations (searched in order)
 
 1. Path in `PI_SENTRY_CONFIG` env var
-2. `<cwd>/.pi/sentry.json[c]` (also accepts `sentry-monitor.json[c]`)
-3. `~/.pi/agent/sentry.json[c]` (also accepts `sentry-monitor.json[c]`)
+2. `<cwd>/.pi/sentry.json[c]`
+3. `~/.pi/agent/sentry.json[c]`
 
 ### Environment Variable Overrides
 
@@ -99,14 +99,11 @@ Create `.pi/sentry.json` (or `.jsonc`) in your project:
 ## Development
 
 ```bash
-git clone https://github.com/sergical/pi-sentry-monitor && cd pi-sentry-monitor
+git clone https://github.com/HazAT/pi-sentry && cd pi-sentry
 npm install
-npm run build
 
-# Install local copy for testing
-pi install ./path/to/pi-sentry-monitor
-# or test without installing (ephemeral)
-pi -e ./dist/index.js
+# Test without installing (ephemeral)
+pi -e ./pi-extension/index.ts
 ```
 
 ## License

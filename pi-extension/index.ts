@@ -17,7 +17,7 @@ let sentryInitialized = false;
 let initializedDsn: string | null = null;
 
 function createLogger(): PluginLogger {
-  const service = "pi-sentry-monitor";
+  const service = "sentry";
 
   const write = (
     level: "debug" | "info" | "warn" | "error",

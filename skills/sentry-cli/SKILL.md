@@ -124,7 +124,7 @@ sentry({ command: "trace logs abc123def456" })
 
 ## Finding Your Own Traces
 
-The `pi-sentry-monitor` extension instruments pi agent sessions as distributed traces. Each trace has:
+The Sentry extension instruments pi agent sessions as distributed traces. Each trace has:
 
 - **`gen_ai.agent.name`** — set to the project directory name (or `agentName` in config)
 - **Project** — configured in `.pi/sentry.json`
@@ -146,7 +146,7 @@ The trace root span is named after the first user message. Each tool call (bash,
 
 If traces aren't appearing:
 1. Check `sentry({ command: "auth status" })` — are you authenticated?
-2. Confirm `pi-sentry-monitor` is installed: `pi list | grep pi-sentry-monitor`
+2. Confirm the Sentry extension is installed: `pi list | grep sentry`
 3. Traces flush at the end of each turn — wait for the current turn to complete
 4. Check that DSN is correct in `.pi/sentry.json` or `~/.pi/agent/sentry.json`
 
