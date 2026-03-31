@@ -1,6 +1,8 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import * as Sentry from "@sentry/node";
+import * as Sentry from "@sentry/node-core/light";
+import { initWithoutDefaultIntegrations, type LightNodeClient } from "@sentry/node-core/light";
+import { setConversationId } from "@sentry/core";
 import { randomUUID } from "node:crypto";
 import { basename, dirname } from "node:path";
 import { loadPluginConfig, type PluginLogger, type ResolvedPluginConfig } from "./config.js";
@@ -100,44 +102,40 @@ function setSpanStatus(span: SentrySpan, isError: boolean): void {
   span.setStatus({ code: isError ? 2 : 1 });
 }
 
-function initSentry(config: ResolvedPluginConfig, logger: PluginLogger): void {
-  if (!sentryInitialized) {
-    Sentry.init({
-      dsn: config.dsn,
-      tracesSampleRate: config.tracesSampleRate,
-      environment: config.environment,
-      release: config.release,
-      debug: config.debug,
-      sendDefaultPii: false,
-      // Disable built-in AI integrations — pi-sentry-monitor creates its own
-      // gen_ai spans with richer context (agent name, conversation ID, tool
-      // I/O).  The auto-instrumented spans can't find the active invoke_agent
-      // span (it's inactive/event-driven), so they'd create orphan traces
-      // with duplicate data.
-      integrations: (defaults) =>
-        defaults.filter(
-          (i) =>
-            ![
-              "Anthropic_AI",
-              "OpenAI",
-              "LangChain",
-              "VercelAI",
-              "Google_GenAI",
-            ].includes(i.name),
-        ),
-    });
-
-    sentryInitialized = true;
-    initializedDsn = config.dsn;
-    return;
+function initSentry(config: ResolvedPluginConfig, logger: PluginLogger): LightNodeClient | undefined {
+  if (sentryInitialized) {
+    if (initializedDsn && initializedDsn !== config.dsn) {
+      logger.warn("Sentry already initialized with different DSN", {
+        initializedDsn,
+        requestedDsn: config.dsn,
+      });
+    }
+    return undefined;
   }
 
-  if (initializedDsn && initializedDsn !== config.dsn) {
-    logger.warn("Sentry is already initialized with a different DSN. Keeping the original client.", {
-      initializedDsn,
-      requestedDsn: config.dsn,
-    });
-  }
+  const client = initWithoutDefaultIntegrations({
+    dsn: config.dsn,
+    tracesSampleRate: config.tracesSampleRate,
+    environment: config.environment,
+    release: config.release,
+    debug: config.debug,
+    sendDefaultPii: false,
+    integrations: [
+      Sentry.eventFiltersIntegration(),
+      Sentry.linkedErrorsIntegration(),
+      Sentry.requestDataIntegration(),
+      Sentry.onUncaughtExceptionIntegration({
+        exitEvenIfOtherHandlersAreRegistered: false,
+      }),
+      Sentry.onUnhandledRejectionIntegration({
+        mode: "warn",
+      }),
+    ],
+  });
+
+  sentryInitialized = true;
+  initializedDsn = config.dsn;
+  return client;
 }
 
 function attachTokenUsage(
@@ -190,7 +188,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   const projectName = getProjectName(config, cwd);
   const agentName = getAgentName(config, projectName);
 
-  initSentry(config, logger);
+  const client = initSentry(config, logger);
 
   logger.info("Sentry observability extension enabled", {
     source: loaded.source,
@@ -288,6 +286,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       }
     }
 
+    const session = Sentry.getIsolationScope().getSession();
+    if (session && session.status === "ok") {
+      Sentry.endSession();
+    }
+
     sessionSpan?.end();
     sessionSpan = undefined;
     completedMessages.clear();
@@ -297,9 +300,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     try {
       sessionId = ctx.sessionManager.getSessionId();
-      Sentry.setConversationId(conversationId);
+      setConversationId(conversationId);
       ensureSessionSpan();
+      Sentry.startSession();
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to create session span", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -311,15 +316,18 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     conversationId = randomUUID();
     turnIndex = 0;
     previousTraceId = undefined;
-    Sentry.setConversationId(conversationId);
+    setConversationId(conversationId);
   });
 
   // --- session_shutdown: final cleanup ---
   pi.on("session_shutdown", async () => {
     try {
       cleanupSession();
-      await Sentry.close(5000);
+      if (client) {
+        await client.close(5000);
+      }
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to cleanup session on shutdown", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -343,6 +351,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         sessionSpan.setAttribute("pi.model.provider", providerId);
       }
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to capture model_select metadata", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -380,6 +389,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
       toolSpans.set(event.toolCallId, span);
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to start tool span", {
         error: error instanceof Error ? error.message : String(error),
         toolCallId: event.toolCallId,
@@ -420,6 +430,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         });
       }
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to finish tool span", {
         error: error instanceof Error ? error.message : String(error),
         toolCallId: event.toolCallId,
@@ -493,6 +504,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
       requestSpans.set(timestamp, requestSpan);
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to start request span", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -604,6 +616,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         }
       }
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to create message usage span", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -640,8 +653,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       }
 
       cleanupSession();
-      await Sentry.flush(5000);
+      if (client) {
+        await client.flush(5000);
+      }
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to flush on turn_end", {
         error: error instanceof Error ? error.message : String(error),
       });
@@ -660,6 +676,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         });
       }
     } catch (error) {
+      Sentry.captureException(error);
       logger.warn("Failed to add agent_end breadcrumb", {
         error: error instanceof Error ? error.message : String(error),
       });
