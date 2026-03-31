@@ -186,6 +186,12 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     pi.exec(cmd, args, { timeout: opts?.timeout, cwd: opts?.cwd ?? cwd })
   );
 
+  function isAuthError(output: string): boolean {
+    const lower = output.toLowerCase();
+    return ["not logged in", "authentication", "401", "auth token", "unauthorized", "login required"]
+      .some(indicator => lower.includes(indicator));
+  }
+
   pi.registerTool({
     name: "sentry",
     label: "Sentry CLI",
@@ -205,6 +211,42 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
       const result = await cli.run(params.command, { timeout: 30_000 });
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+
+      // Check if auth is needed
+      if (result.code !== 0 && isAuthError(output)) {
+        const parts: string[] = [];
+        parts.push("🔐 Not authenticated with Sentry.\n");
+        parts.push("🌐 Opening your browser to log in...");
+        parts.push("   Please approve the request in your browser.\n");
+
+        // Run auth login (opens browser, waits for approval)
+        const authResult = await cli.run("auth login", { timeout: 120_000 });
+
+        if (authResult.code !== 0) {
+          const authOutput = [authResult.stdout, authResult.stderr].filter(Boolean).join("\n");
+          parts.push(`❌ Authentication failed:\n${authOutput}`);
+          return {
+            content: [{ type: "text", text: parts.join("\n") }],
+            isError: true,
+            details: undefined,
+          };
+        }
+
+        parts.push("✅ Authenticated successfully!\n");
+        parts.push(`▲ sentry ${params.command}`);
+
+        // Retry original command
+        const retryResult = await cli.run(params.command, { timeout: 30_000 });
+        const retryOutput = [retryResult.stdout, retryResult.stderr].filter(Boolean).join("\n");
+        parts.push(retryOutput || "(no output)");
+
+        return {
+          content: [{ type: "text", text: parts.join("\n") }],
+          isError: retryResult.code !== 0,
+          details: undefined,
+        };
+      }
+
       return {
         content: [{ type: "text", text: output || "(no output)" }],
         isError: result.code !== 0,
