@@ -1,5 +1,7 @@
 import type { ExtensionAPI, ExtensionUIContext } from "@mariozechner/pi-coding-agent";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
+import { Type } from "@sinclair/typebox";
+import { createSentryCLI } from "./sentry-cli.js";
 import * as Sentry from "@sentry/node-core/light";
 import { initWithoutDefaultIntegrations, type LightNodeClient } from "@sentry/node-core/light";
 import { setConversationId } from "@sentry/core";
@@ -178,6 +180,39 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   // Get cwd from first session_start event context, but load config eagerly with process.cwd()
   const cwd = process.cwd();
+
+  // Register sentry CLI tool — always available regardless of DSN config
+  const cli = createSentryCLI((cmd, args, opts) =>
+    pi.exec(cmd, args, { timeout: opts?.timeout, cwd: opts?.cwd ?? cwd })
+  );
+
+  pi.registerTool({
+    name: "sentry",
+    label: "Sentry CLI",
+    description: "Run Sentry CLI commands. Pass the command string exactly as you would after 'sentry' on the command line.",
+    promptSnippet: "sentry - Run Sentry CLI commands (issue list, trace view, log list, auth status, etc.)",
+    promptGuidelines: [
+      "The sentry tool runs Sentry CLI commands. Pass the full command after 'sentry', e.g. sentry({ command: \"issue list --limit 5 --json\" })",
+      "Use --json flag for machine-readable output when you need to parse results",
+      "Use --fields to limit output columns and reduce noise",
+      "Common commands: auth status, issue list, issue view <id>, trace list, trace view <id>, span list, log list, auth login",
+    ],
+    parameters: Type.Object({
+      command: Type.String({
+        description: "Sentry CLI command (everything after 'sentry'). Examples: 'issue list --limit 5', 'trace view <id> --json', 'auth status'"
+      }),
+    }),
+    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+      const result = await cli.run(params.command, { timeout: 30_000 });
+      const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
+      return {
+        content: [{ type: "text", text: output || "(no output)" }],
+        isError: result.code !== 0,
+        details: undefined,
+      };
+    },
+  });
+
   const loaded = await loadPluginConfig(cwd, logger);
 
   if (!loaded) {
