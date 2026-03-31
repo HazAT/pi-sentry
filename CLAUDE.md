@@ -13,18 +13,16 @@ pi-extension/          ← TypeScript source (extension + sentry CLI wrapper)
 skills/                ← Auto-discovered via package.json "pi.skills"
   pi-sentry-monitor/   ← Setup wizard skill
   sentry-cli/          ← Teaches agents to use the sentry tool
-dist/                  ← Build output (git-ignored)
 scripts/               ← Utility scripts
 ```
 
-## Build & Verify
+## Verify
 
 ```bash
 npm run typecheck   # always run after changes
-npm run build       # compile to dist/
 ```
 
-Both must pass before committing.
+Must pass before committing. No build step — pi loads TypeScript directly.
 
 ## Key Conventions
 
