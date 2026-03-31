@@ -46,9 +46,13 @@ Check auth status before querying:
 sentry({ command: "auth status" })
 ```
 
-If not authenticated, you **cannot** run `sentry auth login` — that requires an interactive terminal. Tell the user to run it themselves:
+If not authenticated, the tool will automatically open the user's browser for login when you run any command. Just run your command — auth is handled for you.
 
-> "Please run `sentry auth login` in your terminal to authenticate."
+You can also explicitly trigger login:
+
+```typescript
+sentry({ command: "auth login" })
+```
 
 ---
 
