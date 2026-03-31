@@ -1,6 +1,6 @@
 import type { ExtensionAPI, ExtensionUIContext, Theme } from "@mariozechner/pi-coding-agent";
 import { truncateToVisualLines, keyHint } from "@mariozechner/pi-coding-agent";
-import { Container, Text, truncateToWidth } from "@mariozechner/pi-tui";
+import { Box, Container, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 import { createSentryCLI } from "./sentry-cli.js";
@@ -210,6 +210,45 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   // Get cwd from first session_start event context, but load config eagerly with process.cwd()
   const cwd = process.cwd();
 
+  // Register init block renderer for conversation display
+  pi.registerMessageRenderer("sentry-init", (message, { expanded }, theme) => {
+    const d = message.details as {
+      monitoring: boolean;
+      project?: string;
+      agent?: string;
+      environment?: string;
+      source?: string;
+      tracing?: boolean;
+      inputs?: boolean;
+      outputs?: boolean;
+    } | undefined;
+
+    const lines: string[] = [];
+
+    if (!d?.monitoring) {
+      lines.push(theme.fg("warning", "▲ Sentry") + theme.fg("muted", " · tool only (no DSN configured)"));
+    } else {
+      lines.push(theme.fg("success", "▲ Sentry") + theme.fg("muted", " · monitoring active"));
+      if (expanded) {
+        const dim = (label: string, value: string) =>
+          `  ${theme.fg("muted", label + ":")} ${value}`;
+        if (d.project) lines.push(dim("Project", d.project));
+        if (d.agent) lines.push(dim("Agent", d.agent));
+        if (d.environment) lines.push(dim("Environment", d.environment));
+        if (d.source) lines.push(dim("Config", d.source));
+        const flags: string[] = [];
+        if (d.tracing) flags.push("tracing");
+        if (d.inputs) flags.push("inputs");
+        if (d.outputs) flags.push("outputs");
+        if (flags.length > 0) lines.push(dim("Capture", flags.join(", ")));
+      }
+    }
+
+    const box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
+    box.addChild(new Text(lines.join("\n"), 0, 0));
+    return box;
+  });
+
   // Register sentry CLI tool — always available regardless of DSN config
   const cli = createSentryCLI((cmd, args, opts) =>
     pi.exec(cmd, args, { timeout: opts?.timeout, cwd: opts?.cwd ?? cwd })
@@ -347,6 +386,12 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   if (!loaded) {
     pi.on("session_start", (_event, ctx) => {
       ctx.ui.setStatus("sentry", "▲ Sentry (no DSN configured)");
+      pi.sendMessage({
+        customType: "sentry-init",
+        content: "Sentry extension loaded (tool only, no monitoring)",
+        display: true,
+        details: { monitoring: false },
+      });
     });
     return;
   }
@@ -541,6 +586,23 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       Sentry.startSession();
       uiContext = ctx.ui;
       ctx.ui.setStatus("sentry", "▲ Sentry (started)");
+
+      pi.sendMessage({
+        customType: "sentry-init",
+        content: "Sentry monitoring active",
+        display: true,
+        details: {
+          monitoring: true,
+          project: projectName,
+          agent: agentName,
+          environment: config.environment,
+          source: loaded.source,
+          tracing: config.tracesSampleRate > 0,
+          inputs: config.recordInputs,
+          outputs: config.recordOutputs,
+        },
+      });
+
       setTimeout(() => {
         // Only revert if no flash overwrote it in the meantime
         if (!statusFlashTimer) {
