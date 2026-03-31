@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionUIContext } from "@mariozechner/pi-coding-agent";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import * as Sentry from "@sentry/node-core/light";
 import { initWithoutDefaultIntegrations, type LightNodeClient } from "@sentry/node-core/light";
@@ -210,12 +210,27 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   let lastUserPrompt: string | undefined;
   let lastAssistantResponse: string | undefined;
 
+  // Status bar flash state
+  let uiContext: ExtensionUIContext | undefined;
+  let pendingSpanCount = 0;
+  let statusFlashTimer: ReturnType<typeof setTimeout> | undefined;
+
   // Conversation tracking — links turns within the same session
   let sessionId: string | undefined;     // from pi's session manager, set on session_start
   let conversationId = randomUUID();     // stable ID across turns; reset on session switch
   let turnIndex = 0;                     // incremented on turn_start
   let previousTraceId: string | undefined; // trace ID of the previous turn for linking
   let turnHadToolCalls = false;            // tracks if current turn had tool executions
+
+  function flashStatus(count: number): void {
+    if (!uiContext || count === 0) return;
+    if (statusFlashTimer) clearTimeout(statusFlashTimer);
+    uiContext.setStatus("sentry", `▲ Sentry (sent ${count} span${count === 1 ? "" : "s"})`);
+    statusFlashTimer = setTimeout(() => {
+      uiContext?.setStatus("sentry", "▲ Sentry");
+      statusFlashTimer = undefined;
+    }, 3000);
+  }
 
   function ensureSessionSpan(): SentrySpan {
     if (sessionSpan) {
@@ -303,6 +318,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       setConversationId(conversationId);
       ensureSessionSpan();
       Sentry.startSession();
+      uiContext = ctx.ui;
       ctx.ui.setStatus("sentry", "▲ Sentry");
     } catch (error) {
       Sentry.captureException(error);
@@ -418,6 +434,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
       span.end();
       toolSpans.delete(event.toolCallId);
+      pendingSpanCount++;
 
       if (config.enableMetrics) {
         Sentry.metrics.count("gen_ai.client.tool.execution", 1, {
@@ -587,6 +604,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         }
       }
       usageSpan.end();
+      pendingSpanCount++;
 
       if (config.enableMetrics) {
         const metricAttrs = {
@@ -654,9 +672,13 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       }
 
       cleanupSession();
+      pendingSpanCount++; // session span
+      const flushedCount = pendingSpanCount;
+      pendingSpanCount = 0;
       if (client) {
         await client.flush(5000);
       }
+      flashStatus(flushedCount);
     } catch (error) {
       Sentry.captureException(error);
       logger.warn("Failed to flush on turn_end", {
