@@ -5,14 +5,10 @@ import { isAbsolute, join, resolve } from "node:path";
 import stripJsonComments from "strip-json-comments";
 
 const CONFIG_FILE_NAMES = [
+  "sentry.json",
+  "sentry.jsonc",
   "sentry-monitor.json",
   "sentry-monitor.jsonc",
-  "pi-sentry-monitor.json",
-  "pi-sentry-monitor.jsonc",
-  "sentry-observability.json",
-  "sentry-observability.jsonc",
-  "pi-sentry-observability.json",
-  "pi-sentry-observability.jsonc",
 ] as const;
 
 const DEFAULTS = {

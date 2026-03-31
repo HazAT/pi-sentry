@@ -33,7 +33,7 @@ A companion skill is included — once installed, ask pi to "set up Sentry monit
 
 ## Configuration
 
-Create `.pi/sentry-monitor.json` (or `.jsonc`) in your project:
+Create `.pi/sentry.json` (or `.jsonc`) in your project:
 
 ```json
 {
@@ -44,8 +44,8 @@ Create `.pi/sentry-monitor.json` (or `.jsonc`) in your project:
 ### Config File Locations (searched in order)
 
 1. Path in `PI_SENTRY_CONFIG` env var
-2. `<cwd>/.pi/sentry-monitor.json[c]`
-3. `~/.pi/agent/sentry-monitor.json[c]`
+2. `<cwd>/.pi/sentry.json[c]` (also accepts `sentry-monitor.json[c]`)
+3. `~/.pi/agent/sentry.json[c]` (also accepts `sentry-monitor.json[c]`)
 
 ### Environment Variable Overrides
 

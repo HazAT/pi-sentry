@@ -74,7 +74,7 @@ Ask:
 
 1. **Sentry DSN** *(required)* — "Paste your DSN from Sentry → Project Settings → Client Keys. Looks like: `https://abc123@o456.ingest.sentry.io/789`"
 
-2. **Config scope** — "Should this be project-local (`.pi/sentry-monitor.json`) or global (`~/.pi/agent/sentry-monitor.json`)? Project-local applies only here; global applies to all pi sessions on this machine."
+2. **Config scope** — "Should this be project-local (`.pi/sentry.json`) or global (`~/.pi/agent/sentry.json`)? Project-local applies only here; global applies to all pi sessions on this machine."
 
 3. **Agent/project name** — "We'll use `<detected-project-name>` as the agent name on Sentry spans (from your current directory). Want to change it, or is that good?"
 

@@ -2,3 +2,7 @@ node_modules/
 dist/
 *.js.map
 *.d.ts.map
+.pi/sentry.json
+.pi/sentry.jsonc
+.pi/sentry-monitor.json
+.pi/sentry-monitor.jsonc
