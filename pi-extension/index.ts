@@ -1,4 +1,6 @@
-import type { ExtensionAPI, ExtensionUIContext } from "@mariozechner/pi-coding-agent";
+import type { ExtensionAPI, ExtensionUIContext, Theme } from "@mariozechner/pi-coding-agent";
+import { truncateToVisualLines, keyHint } from "@mariozechner/pi-coding-agent";
+import { Container, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import type { AssistantMessage } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
 import { createSentryCLI } from "./sentry-cli.js";
@@ -175,6 +177,18 @@ function isAssistantMessage(msg: unknown): msg is AssistantMessage {
   return m.role === "assistant" && typeof m.model === "string" && m.usage !== null && typeof m.usage === "object";
 }
 
+type SentryRenderState = {
+  startedAt: number | undefined;
+  endedAt: number | undefined;
+  interval: NodeJS.Timeout | undefined;
+};
+
+const SENTRY_PREVIEW_LINES = 5;
+
+function formatSentryDuration(ms: number): string {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
 export default async function piSentryMonitor(pi: ExtensionAPI) {
   const logger = createLogger();
 
@@ -208,6 +222,65 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         description: "Sentry CLI command (everything after 'sentry'). Examples: 'issue list --limit 5', 'trace view <id> --json', 'auth status'"
       }),
     }),
+    renderCall(args: { command: string }, theme: Theme, context) {
+      const state = context.state as Partial<SentryRenderState>;
+      if (context.executionStarted && state.startedAt === undefined) {
+        state.startedAt = Date.now();
+        state.endedAt = undefined;
+      }
+      const text = (context.lastComponent as Text) ?? new Text("", 0, 0);
+      const command = args?.command ?? "...";
+      text.setText(theme.fg("toolTitle", theme.bold(`▲ sentry ${command}`)));
+      return text;
+    },
+
+    renderResult(result, options, theme: Theme, context) {
+      const state = context.state as Partial<SentryRenderState>;
+      if (state.startedAt !== undefined && options.isPartial && !state.interval) {
+        state.interval = setInterval(() => context.invalidate(), 1000);
+      }
+      if (!options.isPartial || context.isError) {
+        state.endedAt ??= Date.now();
+        if (state.interval) {
+          clearInterval(state.interval);
+          state.interval = undefined;
+        }
+      }
+      const component = (context.lastComponent as Container) ?? new Container();
+      component.clear();
+      const textContent = result.content
+        .filter((c): c is { type: "text"; text: string } => c.type === "text")
+        .map((c) => c.text)
+        .join("\n")
+        .trim();
+      if (textContent) {
+        const styledOutput = textContent.split("\n").map((line: string) => theme.fg("toolOutput", line)).join("\n");
+        if (context.expanded) {
+          component.addChild(new Text(`\n${styledOutput}`, 0, 0));
+        } else {
+          component.addChild({
+            render: (width: number) => {
+              const preview = truncateToVisualLines(styledOutput, SENTRY_PREVIEW_LINES, width);
+              if (preview.skippedCount > 0) {
+                const hint = theme.fg("muted", `... (${preview.skippedCount} earlier lines,`) +
+                  ` ${keyHint("app.tools.expand", "to expand")})`;
+                return ["", truncateToWidth(hint, width, "..."), ...preview.visualLines];
+              }
+              return ["", ...preview.visualLines];
+            },
+            invalidate: () => {},
+          });
+        }
+      }
+      if (state.startedAt !== undefined) {
+        const label = options.isPartial ? "Elapsed" : "Took";
+        const endTime = state.endedAt ?? Date.now();
+        component.addChild(new Text(`\n${theme.fg("muted", `${label} ${formatSentryDuration(endTime - state.startedAt)}`)}`, 0, 0));
+      }
+      component.invalidate();
+      return component;
+    },
+
     async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
       const result = await cli.run(params.command, { timeout: 30_000 });
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
