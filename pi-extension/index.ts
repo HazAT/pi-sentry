@@ -202,7 +202,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   function isAuthError(output: string): boolean {
     const lower = output.toLowerCase();
-    return ["not logged in", "authentication", "401", "auth token", "unauthorized", "login required"]
+    return ["not logged in", "not authenticated", "401", "auth token", "unauthorized", "login required", "run 'sentry auth login'", "run `sentry auth login`"]
       .some(indicator => lower.includes(indicator));
   }
 
@@ -281,12 +281,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       return component;
     },
 
-    async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+    async execute(_toolCallId, params, signal, _onUpdate, _ctx) {
       const result = await cli.run(params.command, { timeout: 30_000 });
       const output = [result.stdout, result.stderr].filter(Boolean).join("\n");
 
       // Check if auth is needed
       if (result.code !== 0 && isAuthError(output)) {
+        if (signal?.aborted) {
+          return { content: [{ type: "text", text: output || "(no output)" }], isError: true, details: undefined };
+        }
+
         const parts: string[] = [];
         parts.push("🔐 Not authenticated with Sentry.\n");
         parts.push("🌐 Opening your browser to log in...");
