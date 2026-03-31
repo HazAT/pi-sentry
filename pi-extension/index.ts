@@ -303,7 +303,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       setConversationId(conversationId);
       ensureSessionSpan();
       Sentry.startSession();
-      ctx.ui.setStatus("sentry", "🔭 Sentry");
+      ctx.ui.setStatus("sentry", "▲ Sentry");
     } catch (error) {
       Sentry.captureException(error);
       logger.warn("Failed to create session span", {
