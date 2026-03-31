@@ -14,6 +14,7 @@ const DEFAULTS = {
   includeMessageUsageSpans: true,
   includeSessionEvents: true,
   enableMetrics: false,
+  enableCLIInsights: false,
   tags: {} as Record<string, string>,
 } as const;
 
@@ -38,6 +39,7 @@ export interface PluginConfig {
   includeMessageUsageSpans?: boolean;
   includeSessionEvents?: boolean;
   enableMetrics?: boolean;
+  enableCLIInsights?: boolean;
   tags?: Record<string, string>;
 }
 
@@ -55,6 +57,7 @@ export interface ResolvedPluginConfig {
   includeMessageUsageSpans: boolean;
   includeSessionEvents: boolean;
   enableMetrics: boolean;
+  enableCLIInsights: boolean;
   tags: Record<string, string>;
 }
 
@@ -227,6 +230,9 @@ function normalizeConfig(raw: Record<string, unknown>): ResolvedPluginConfig {
     enableMetrics:
       asOptionalBoolean(raw.enableMetrics, "enableMetrics") ??
       DEFAULTS.enableMetrics,
+    enableCLIInsights:
+      asOptionalBoolean(raw.enableCLIInsights, "enableCLIInsights") ??
+      DEFAULTS.enableCLIInsights,
     tags: asOptionalTags(raw.tags, "tags") ?? DEFAULTS.tags,
   };
 }

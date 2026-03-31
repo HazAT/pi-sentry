@@ -238,6 +238,27 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   });
 
 
+  // Background CLI insights state
+  let sentryAuthenticated = false;
+  let lastBackgroundQuery = 0;
+  const BACKGROUND_QUERY_INTERVAL = 60_000;
+
+  async function runBackgroundQuery() {
+    uiContext?.setStatus("sentry", "▲ Sentry (checking issues...)");
+    try {
+      const result = await cli.run("issue list --limit 3 --json --fields shortId,title,level", { timeout: 15_000 });
+      uiContext?.setStatus("sentry", "▲ Sentry (authenticated)");
+      if (result.code === 0 && result.stdout.trim()) {
+        pi.sendUserMessage(
+          `[Sentry context] Recent issues:\n${result.stdout}`,
+          { deliverAs: "steer" },
+        );
+      }
+    } catch {
+      uiContext?.setStatus("sentry", "▲ Sentry (authenticated)");
+    }
+  }
+
   // Single-session state (pi runs one session at a time)
   let sessionSpan: SentrySpan | undefined;
   let modelId = "unknown";
@@ -364,6 +385,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           ctx.ui.setStatus("sentry", "▲ Sentry");
         }
       }, 3000);
+
+      if (config.enableCLIInsights) {
+        cli.run("auth status", { timeout: 10_000 }).then((result) => {
+          sentryAuthenticated = result.code === 0;
+          const authStatus = sentryAuthenticated ? "authenticated" : "not authenticated";
+          uiContext?.setStatus("sentry", `▲ Sentry (${authStatus})`);
+        }).catch(() => {
+          // CLI not available — silently skip
+        });
+      }
     } catch (error) {
       Sentry.captureException(error);
       logger.warn("Failed to create session span", {
@@ -723,6 +754,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         await client.flush(5000);
       }
       flashStatus(flushedCount);
+
+      if (config.enableCLIInsights && sentryAuthenticated) {
+        const now = Date.now();
+        if (now - lastBackgroundQuery >= BACKGROUND_QUERY_INTERVAL) {
+          lastBackgroundQuery = now;
+          runBackgroundQuery().catch((err) => {
+            logger.warn("Background Sentry query failed", { error: String(err) });
+          });
+        }
+      }
     } catch (error) {
       Sentry.captureException(error);
       logger.warn("Failed to flush on turn_end", {
