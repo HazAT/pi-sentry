@@ -402,16 +402,6 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   const client = initSentry(config, logger);
 
-  logger.info("Sentry observability extension enabled", {
-    source: loaded.source,
-    projectName,
-    agentName,
-    tracesSampleRate: config.tracesSampleRate,
-    recordInputs: config.recordInputs,
-    recordOutputs: config.recordOutputs,
-  });
-
-
   // Background CLI insights state
   let sentryAuthenticated = false;
   let lastBackgroundQuery = 0;
