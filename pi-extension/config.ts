@@ -334,6 +334,11 @@ function addEnvOverrides(
     withEnv.enableMetrics = enableMetrics;
   }
 
+  const enableCLIInsights = parseBooleanEnv("PI_SENTRY_ENABLE_CLI_INSIGHTS");
+  if (enableCLIInsights !== undefined) {
+    withEnv.enableCLIInsights = enableCLIInsights;
+  }
+
   const tagsEnv = process.env.PI_SENTRY_TAGS;
   if (tagsEnv) {
     const envTags: Record<string, string> = {};
