@@ -416,11 +416,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   function flashStatus(count: number): void {
     if (!uiContext || count === 0) return;
     if (statusFlashTimer) clearTimeout(statusFlashTimer);
-    uiContext.setStatus("sentry", `▲ Sentry (sent ${count} span${count === 1 ? "" : "s"})`);
+    uiContext.setStatus("sentry", `▲ Sentry (sent ${count} event${count === 1 ? "" : "s"})`);
     statusFlashTimer = setTimeout(() => {
       uiContext?.setStatus("sentry", "▲ Sentry");
       statusFlashTimer = undefined;
-    }, 3000);
+    }, 5000);
   }
 
   function ensureSessionSpan(): SentrySpan {
@@ -546,7 +546,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         if (!statusFlashTimer) {
           ctx.ui.setStatus("sentry", "▲ Sentry");
         }
-      }, 3000);
+      }, 5000);
 
       if (config.enableCLIInsights) {
         cli.run("auth status", { timeout: 10_000 }).then((result) => {
