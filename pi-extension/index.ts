@@ -444,6 +444,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   // Conversation tracking — links turns within the same session
   let sessionId: string | undefined;     // from pi's session manager, used as conversation ID
+  let sessionFilePath: string | undefined; // full path to the .jsonl session file
   let turnIndex = 0;                     // incremented on turn_start
   let previousTraceId: string | undefined; // trace ID of the previous turn for linking
   let turnHadToolCalls = false;            // tracks if current turn had tool executions
@@ -488,6 +489,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           // Conversation tracking
           "pi.turn.index": turnIndex,
           ...(sessionId ? { "pi.session.id": sessionId } : {}),
+          ...(sessionFilePath ? { "pi.session.file": sessionFilePath } : {}),
           ...(lastUserPrompt && config.recordInputs ? {
             "gen_ai.request.messages": serializeAttribute(
               JSON.stringify([{ role: "user", content: lastUserPrompt }]),
@@ -572,6 +574,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   pi.on("session_start", (_event, ctx) => {
     try {
       sessionId = ctx.sessionManager.getSessionId();
+      sessionFilePath = ctx.sessionManager.getSessionFile();
       setConversationId(sessionId);
       Sentry.startSession();
       uiContext = ctx.ui;
@@ -579,7 +582,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
       pi.sendMessage({
         customType: "sentry-init",
-        content: "Sentry monitoring active",
+        content: `Sentry monitoring active. Your session ID is \`${sessionId}\`. When querying Sentry, filter by \`pi.session.id:${sessionId}\` to find traces from this session.`,
         display: true,
         details: {
           monitoring: true,
@@ -620,6 +623,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   // --- session_switch: reset conversation ID on session change ---
   pi.on("session_switch", (_event, ctx) => {
     sessionId = ctx.sessionManager.getSessionId();
+    sessionFilePath = ctx.sessionManager.getSessionFile();
     turnIndex = 0;
     previousTraceId = undefined;
     setConversationId(sessionId);
