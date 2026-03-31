@@ -538,7 +538,6 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     try {
       sessionId = ctx.sessionManager.getSessionId();
       setConversationId(sessionId);
-      ensureSessionSpan();
       Sentry.startSession();
       uiContext = ctx.ui;
       ctx.ui.setStatus("sentry", "▲ Sentry (started)");
