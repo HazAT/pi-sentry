@@ -427,28 +427,40 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       return sessionSpan;
     }
 
-    sessionSpan = Sentry.startInactiveSpan({
-      op: "gen_ai.invoke_agent",
-      name: `invoke_agent ${agentName}`,
-      forceTransaction: true,
-      attributes: {
-        "gen_ai.operation.name": "invoke_agent",
-        "gen_ai.agent.name": agentName,
-        "gen_ai.request.model": modelId,
-        "pi.model.provider": providerId,
-        "pi.project.name": projectName,
-        "pi.capture.session_events": config.includeSessionEvents,
-        // Conversation tracking
-        "pi.turn.index": turnIndex,
-        ...(sessionId ? { "pi.session.id": sessionId } : {}),
-        ...(lastUserPrompt && config.recordInputs ? {
-          "gen_ai.request.messages": serializeAttribute(
-            JSON.stringify([{ role: "user", content: lastUserPrompt }]),
-            config.maxAttributeLength,
-          ),
-        } : {}),
-        ...config.tags,
-      },
+    // Each agent interaction gets its own trace.  startNewTrace() resets
+    // the scope's propagation context so the span receives a fresh trace ID.
+    // The conversation ID (set on the isolation scope) links all traces
+    // from the same session together.
+    sessionSpan = Sentry.startNewTrace(() => {
+      // Re-apply conversation ID inside the new trace scope so it
+      // propagates to all child spans.
+      if (sessionId) {
+        setConversationId(sessionId);
+      }
+
+      return Sentry.startInactiveSpan({
+        op: "gen_ai.invoke_agent",
+        name: `invoke_agent ${agentName}`,
+        forceTransaction: true,
+        attributes: {
+          "gen_ai.operation.name": "invoke_agent",
+          "gen_ai.agent.name": agentName,
+          "gen_ai.request.model": modelId,
+          "pi.model.provider": providerId,
+          "pi.project.name": projectName,
+          "pi.capture.session_events": config.includeSessionEvents,
+          // Conversation tracking
+          "pi.turn.index": turnIndex,
+          ...(sessionId ? { "pi.session.id": sessionId } : {}),
+          ...(lastUserPrompt && config.recordInputs ? {
+            "gen_ai.request.messages": serializeAttribute(
+              JSON.stringify([{ role: "user", content: lastUserPrompt }]),
+              config.maxAttributeLength,
+            ),
+          } : {}),
+          ...config.tags,
+        },
+      });
     });
 
     return sessionSpan;
