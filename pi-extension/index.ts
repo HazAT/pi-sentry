@@ -105,6 +105,12 @@ function setSpanStatus(span: SentrySpan, isError: boolean): void {
   span.setStatus({ code: isError ? 2 : 1 });
 }
 
+function isAuthError(output: string): boolean {
+  const lower = output.toLowerCase();
+  return ["not logged in", "not authenticated", "401", "auth token", "unauthorized", "login required", "run 'sentry auth login'", "run `sentry auth login`"]
+    .some(indicator => lower.includes(indicator));
+}
+
 function initSentry(config: ResolvedPluginConfig, logger: PluginLogger): LightNodeClient | undefined {
   if (sentryInitialized) {
     if (initializedDsn && initializedDsn !== config.dsn) {
@@ -198,12 +204,6 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   const cli = createSentryCLI((cmd, args, opts) =>
     pi.exec(cmd, args, { timeout: opts?.timeout, cwd: opts?.cwd ?? cwd })
   );
-
-  function isAuthError(output: string): boolean {
-    const lower = output.toLowerCase();
-    return ["not logged in", "not authenticated", "401", "auth token", "unauthorized", "login required", "run 'sentry auth login'", "run `sentry auth login`"]
-      .some(indicator => lower.includes(indicator));
-  }
 
   pi.registerTool({
     name: "sentry",
