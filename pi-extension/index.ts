@@ -221,6 +221,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     description: "Run Sentry CLI commands. Pass the command string exactly as you would after 'sentry' on the command line.",
     promptSnippet: "sentry - Run Sentry CLI commands (issue list, trace view, log list, auth status, etc.)",
     promptGuidelines: [
+      "Before using the sentry tool, load the `sentry-cli` skill once for full usage guidance, workflows, and examples.",
       "The sentry tool runs Sentry CLI commands. Pass the full command after 'sentry', e.g. sentry({ command: \"issue list --limit 5 --json\" })",
       "Use --json flag for machine-readable output when you need to parse results",
       "Use --fields to limit output columns and reduce noise",
