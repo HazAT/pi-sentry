@@ -181,6 +181,9 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   const loaded = await loadPluginConfig(cwd, logger);
 
   if (!loaded) {
+    pi.on("session_start", (_event, ctx) => {
+      ctx.ui.setStatus("sentry", "▲ Sentry (no DSN configured)");
+    });
     return;
   }
 
@@ -319,7 +322,13 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       ensureSessionSpan();
       Sentry.startSession();
       uiContext = ctx.ui;
-      ctx.ui.setStatus("sentry", "▲ Sentry");
+      ctx.ui.setStatus("sentry", "▲ Sentry (started)");
+      setTimeout(() => {
+        // Only revert if no flash overwrote it in the meantime
+        if (!statusFlashTimer) {
+          ctx.ui.setStatus("sentry", "▲ Sentry");
+        }
+      }, 3000);
     } catch (error) {
       Sentry.captureException(error);
       logger.warn("Failed to create session span", {
