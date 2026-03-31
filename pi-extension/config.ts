@@ -4,12 +4,7 @@ import { homedir } from "node:os";
 import { isAbsolute, join, resolve } from "node:path";
 import stripJsonComments from "strip-json-comments";
 
-const CONFIG_FILE_NAMES = [
-  "sentry.json",
-  "sentry.jsonc",
-  "sentry-monitor.json",
-  "sentry-monitor.jsonc",
-] as const;
+const CONFIG_FILE_NAMES = ["sentry.json", "sentry.jsonc"] as const;
 
 const DEFAULTS = {
   tracesSampleRate: 1,
@@ -75,14 +70,20 @@ function asString(value: unknown, fieldName: string): string {
   return value.trim();
 }
 
-function asOptionalString(value: unknown, fieldName: string): string | undefined {
+function asOptionalString(
+  value: unknown,
+  fieldName: string,
+): string | undefined {
   if (value === undefined) {
     return undefined;
   }
   return asString(value, fieldName);
 }
 
-function asOptionalBoolean(value: unknown, fieldName: string): boolean | undefined {
+function asOptionalBoolean(
+  value: unknown,
+  fieldName: string,
+): boolean | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -92,7 +93,10 @@ function asOptionalBoolean(value: unknown, fieldName: string): boolean | undefin
   return value;
 }
 
-function asOptionalNumber(value: unknown, fieldName: string): number | undefined {
+function asOptionalNumber(
+  value: unknown,
+  fieldName: string,
+): number | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -102,7 +106,10 @@ function asOptionalNumber(value: unknown, fieldName: string): number | undefined
   return value;
 }
 
-function asOptionalTags(value: unknown, fieldName: string): Record<string, string> | undefined {
+function asOptionalTags(
+  value: unknown,
+  fieldName: string,
+): Record<string, string> | undefined {
   if (value === undefined) {
     return undefined;
   }
@@ -148,7 +155,10 @@ function parseNumberEnv(name: string): number | undefined {
   return parsed;
 }
 
-function parseConfigContent(raw: string, source: string): Record<string, unknown> {
+function parseConfigContent(
+  raw: string,
+  source: string,
+): Record<string, unknown> {
   try {
     const parsed = JSON.parse(stripJsonComments(raw));
 
@@ -178,7 +188,8 @@ function normalizeConfig(raw: Record<string, unknown>): ResolvedPluginConfig {
   }
 
   const tracesSampleRate =
-    asOptionalNumber(raw.tracesSampleRate, "tracesSampleRate") ?? DEFAULTS.tracesSampleRate;
+    asOptionalNumber(raw.tracesSampleRate, "tracesSampleRate") ??
+    DEFAULTS.tracesSampleRate;
   if (tracesSampleRate < 0 || tracesSampleRate > 1) {
     throw new Error('"tracesSampleRate" must be between 0 and 1');
   }
@@ -198,18 +209,24 @@ function normalizeConfig(raw: Record<string, unknown>): ResolvedPluginConfig {
     debug: asOptionalBoolean(raw.debug, "debug"),
     agentName: asOptionalString(raw.agentName, "agentName"),
     projectName: asOptionalString(raw.projectName, "projectName"),
-    recordInputs: asOptionalBoolean(raw.recordInputs, "recordInputs") ?? DEFAULTS.recordInputs,
+    recordInputs:
+      asOptionalBoolean(raw.recordInputs, "recordInputs") ??
+      DEFAULTS.recordInputs,
     recordOutputs:
-      asOptionalBoolean(raw.recordOutputs, "recordOutputs") ?? DEFAULTS.recordOutputs,
+      asOptionalBoolean(raw.recordOutputs, "recordOutputs") ??
+      DEFAULTS.recordOutputs,
     maxAttributeLength,
     includeMessageUsageSpans:
-      asOptionalBoolean(raw.includeMessageUsageSpans, "includeMessageUsageSpans") ??
-      DEFAULTS.includeMessageUsageSpans,
+      asOptionalBoolean(
+        raw.includeMessageUsageSpans,
+        "includeMessageUsageSpans",
+      ) ?? DEFAULTS.includeMessageUsageSpans,
     includeSessionEvents:
       asOptionalBoolean(raw.includeSessionEvents, "includeSessionEvents") ??
       DEFAULTS.includeSessionEvents,
     enableMetrics:
-      asOptionalBoolean(raw.enableMetrics, "enableMetrics") ?? DEFAULTS.enableMetrics,
+      asOptionalBoolean(raw.enableMetrics, "enableMetrics") ??
+      DEFAULTS.enableMetrics,
     tags: asOptionalTags(raw.tags, "tags") ?? DEFAULTS.tags,
   };
 }
@@ -262,7 +279,9 @@ async function getCandidatePaths(cwd: string): Promise<string[]> {
   return candidates;
 }
 
-function addEnvOverrides(raw: Record<string, unknown>): Record<string, unknown> {
+function addEnvOverrides(
+  raw: Record<string, unknown>,
+): Record<string, unknown> {
   const withEnv = { ...raw };
 
   const dsn = process.env.PI_SENTRY_DSN ?? process.env.SENTRY_DSN;
@@ -285,12 +304,16 @@ function addEnvOverrides(raw: Record<string, unknown>): Record<string, unknown> 
     withEnv.recordOutputs = recordOutputs;
   }
 
-  const includeSessionEvents = parseBooleanEnv("PI_SENTRY_INCLUDE_SESSION_EVENTS");
+  const includeSessionEvents = parseBooleanEnv(
+    "PI_SENTRY_INCLUDE_SESSION_EVENTS",
+  );
   if (includeSessionEvents !== undefined) {
     withEnv.includeSessionEvents = includeSessionEvents;
   }
 
-  const includeMessageUsageSpans = parseBooleanEnv("PI_SENTRY_INCLUDE_MESSAGE_USAGE_SPANS");
+  const includeMessageUsageSpans = parseBooleanEnv(
+    "PI_SENTRY_INCLUDE_MESSAGE_USAGE_SPANS",
+  );
   if (includeMessageUsageSpans !== undefined) {
     withEnv.includeMessageUsageSpans = includeMessageUsageSpans;
   }
@@ -318,7 +341,10 @@ function addEnvOverrides(raw: Record<string, unknown>): Record<string, unknown> 
         }
       }
     }
-    withEnv.tags = { ...(withEnv.tags as Record<string, string> | undefined), ...envTags };
+    withEnv.tags = {
+      ...(withEnv.tags as Record<string, string> | undefined),
+      ...envTags,
+    };
   }
 
   if (process.env.SENTRY_ENVIRONMENT) {
@@ -355,10 +381,13 @@ export async function loadPluginConfig(
   raw = addEnvOverrides(raw);
 
   if (typeof raw.dsn !== "string" || raw.dsn.trim().length === 0) {
-    logger.info("Sentry extension config not found. Extension will remain disabled.", {
-      lookedIn: candidates,
-      expectedFiles: CONFIG_FILE_NAMES,
-    });
+    logger.info(
+      "Sentry extension config not found. Extension will remain disabled.",
+      {
+        lookedIn: candidates,
+        expectedFiles: CONFIG_FILE_NAMES,
+      },
+    );
     return null;
   }
 
