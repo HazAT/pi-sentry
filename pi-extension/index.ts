@@ -444,6 +444,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   function cleanupSession(): void {
     for (const [key, span] of toolSpans) {
+      setSpanStatus(span, false);
       span.end();
       toolSpans.delete(key);
     }
@@ -458,6 +459,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         span.setAttribute("gen_ai.response.model", modelId);
         span.setAttribute("pi.model.provider", providerId);
       }
+      setSpanStatus(span, false);
       span.end();
       requestSpans.delete(key);
     }
@@ -484,7 +486,10 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       Sentry.endSession();
     }
 
-    sessionSpan?.end();
+    if (sessionSpan) {
+      setSpanStatus(sessionSpan, false);
+      sessionSpan.end();
+    }
     sessionSpan = undefined;
     completedMessages.clear();
   }
@@ -797,6 +802,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           );
         }
       }
+      setSpanStatus(usageSpan, false);
       usageSpan.end();
       pendingSpanCount++;
 
