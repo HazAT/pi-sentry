@@ -156,18 +156,19 @@ function attachTokenUsage(
     cacheWrite: number;
     totalTokens: number;
   },
-): void {
+): { totalInput: number; totalOutput: number } {
   // gen_ai.usage.input_tokens must be TOTAL input tokens per OTel semantic conventions.
   // Pi's usage.input only contains non-cached tokens (Anthropic's input_tokens field),
   // so we add cache_read + cache_write to get the true total.
   // Sentry's cost formula computes: uncached = input_tokens - cached, so if we only
   // report non-cached here, the subtraction goes negative → negative cost.
-  const totalInputTokens = (usage.input ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
-  if (totalInputTokens > 0) {
-    span.setAttribute("gen_ai.usage.input_tokens", totalInputTokens);
+  const totalInput = (usage.input ?? 0) + (usage.cacheRead ?? 0) + (usage.cacheWrite ?? 0);
+  const totalOutput = usage.output ?? 0;
+  if (totalInput > 0) {
+    span.setAttribute("gen_ai.usage.input_tokens", totalInput);
   }
-  if (typeof usage.output === "number") {
-    span.setAttribute("gen_ai.usage.output_tokens", usage.output);
+  if (totalOutput > 0) {
+    span.setAttribute("gen_ai.usage.output_tokens", totalOutput);
   }
   if (typeof usage.cacheRead === "number") {
     span.setAttribute("gen_ai.usage.input_tokens.cached", usage.cacheRead);
@@ -175,9 +176,12 @@ function attachTokenUsage(
   if (typeof usage.cacheWrite === "number") {
     span.setAttribute("gen_ai.usage.input_tokens.cache_write", usage.cacheWrite);
   }
-  if (typeof usage.totalTokens === "number") {
-    span.setAttribute("gen_ai.usage.total_tokens", usage.totalTokens);
+  // Derive total_tokens consistently from our computed totals
+  const totalTokens = totalInput + totalOutput;
+  if (totalTokens > 0) {
+    span.setAttribute("gen_ai.usage.total_tokens", totalTokens);
   }
+  return { totalInput, totalOutput };
 }
 
 function isAssistantMessage(msg: unknown): msg is AssistantMessage {
@@ -393,6 +397,10 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   let lastUserPrompt: string | undefined;
   let lastAssistantResponse: string | undefined;
 
+  // Aggregate token usage across all request spans for the invoke_agent root span
+  let aggregateInputTokens = 0;
+  let aggregateOutputTokens = 0;
+
   // Status bar flash state
   let uiContext: ExtensionUIContext | undefined;
   let pendingSpanCount = 0;
@@ -468,9 +476,10 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       requestSpans.delete(key);
     }
 
-    // Stamp the invoke_agent span with the final model and assistant response
-    // before ending.  The model may have been "unknown" at span creation time
-    // if model_select fired after the span was opened.
+    // Stamp the invoke_agent span with the final model, assistant response,
+    // and aggregate token usage before ending.  The model may have been
+    // "unknown" at span creation time if model_select fired after the span
+    // was opened.
     if (sessionSpan) {
       if (modelId !== "unknown") {
         sessionSpan.setAttribute("gen_ai.request.model", modelId);
@@ -482,6 +491,17 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           "gen_ai.response.text",
           serializeAttribute(lastAssistantResponse, config.maxAttributeLength),
         );
+      }
+      // Aggregate token usage across all LLM requests in this agent invocation
+      if (aggregateInputTokens > 0) {
+        sessionSpan.setAttribute("gen_ai.usage.input_tokens", aggregateInputTokens);
+      }
+      if (aggregateOutputTokens > 0) {
+        sessionSpan.setAttribute("gen_ai.usage.output_tokens", aggregateOutputTokens);
+      }
+      const aggregateTotal = aggregateInputTokens + aggregateOutputTokens;
+      if (aggregateTotal > 0) {
+        sessionSpan.setAttribute("gen_ai.usage.total_tokens", aggregateTotal);
       }
     }
 
@@ -496,6 +516,8 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
     sessionSpan = undefined;
     completedMessages.clear();
+    aggregateInputTokens = 0;
+    aggregateOutputTokens = 0;
   }
 
   // --- session_start: capture session ID and set conversation ---
@@ -593,6 +615,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           "gen_ai.agent.name": agentName,
           "gen_ai.request.model": modelId,
           "gen_ai.tool.name": event.toolName,
+          "gen_ai.tool.type": "function",
           "pi.model.provider": providerId,
           "pi.tool_call.id": event.toolCallId,
           "pi.project.name": projectName,
@@ -674,6 +697,8 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
     lastAssistantResponse = undefined;
     turnHadToolCalls = false;
+    aggregateInputTokens = 0;
+    aggregateOutputTokens = 0;
   });
 
   // --- message_start: open gen_ai.request span so we capture real LLM latency ---
@@ -703,6 +728,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         attributes: {
           "gen_ai.operation.name": "request",
           "gen_ai.request.model": spanModel,
+          "gen_ai.response.model": spanModel,
           "gen_ai.agent.name": agentName,
           "pi.model.provider": providerId,
           "pi.project.name": projectName,
@@ -781,7 +807,9 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         });
       }
 
-      attachTokenUsage(usageSpan, msg.usage);
+      const { totalInput, totalOutput } = attachTokenUsage(usageSpan, msg.usage);
+      aggregateInputTokens += totalInput;
+      aggregateOutputTokens += totalOutput;
 
       // Record user prompt (in case message_start didn't fire or prompt came after).
       if (config.recordInputs && lastUserPrompt) {
@@ -792,18 +820,33 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         );
       }
 
-      // Record assistant output on the request span and track for invoke_agent
-      if (config.recordOutputs && msg.content) {
-        const textContent = msg.content
-          .filter((c): c is { type: "text"; text: string } => (c as any).type === "text" && typeof (c as any).text === "string")
-          .map((c) => c.text)
-          .join("\n");
-        if (textContent.length > 0) {
-          lastAssistantResponse = textContent;
+      // Record assistant output and tool calls on the request span
+      if (msg.content) {
+        // Extract tool calls from the response
+        const toolCalls = msg.content
+          .filter((c): c is { type: "toolCall"; id: string; name: string; arguments: Record<string, any> } =>
+            (c as any).type === "toolCall")
+          .map((c) => ({ name: c.name, type: "function", arguments: JSON.stringify(c.arguments) }));
+        if (toolCalls.length > 0) {
           usageSpan.setAttribute(
-            "gen_ai.response.text",
-            serializeAttribute(textContent, config.maxAttributeLength),
+            "gen_ai.response.tool_calls",
+            serializeAttribute(JSON.stringify(toolCalls), config.maxAttributeLength),
           );
+        }
+
+        // Record text output
+        if (config.recordOutputs) {
+          const textContent = msg.content
+            .filter((c): c is { type: "text"; text: string } => (c as any).type === "text" && typeof (c as any).text === "string")
+            .map((c) => c.text)
+            .join("\n");
+          if (textContent.length > 0) {
+            lastAssistantResponse = textContent;
+            usageSpan.setAttribute(
+              "gen_ai.response.text",
+              serializeAttribute(textContent, config.maxAttributeLength),
+            );
+          }
         }
       }
       setSpanStatus(usageSpan, false);
