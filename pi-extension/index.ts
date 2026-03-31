@@ -89,17 +89,17 @@ function detectSubagentName(): string | undefined {
   return undefined;
 }
 
-function getAgentName(config: ResolvedPluginConfig, projectName: string): string {
+function getAgentName(config: ResolvedPluginConfig): string {
   if (config.agentName && config.agentName.length > 0) {
     return config.agentName;
   }
 
   const subagentName = detectSubagentName();
   if (subagentName) {
-    return `${projectName}/${subagentName}`;
+    return `pi/${subagentName}`;
   }
 
-  return projectName;
+  return "pi";
 }
 
 function setSpanStatus(span: SentrySpan, isError: boolean): void {
@@ -343,7 +343,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   const config = loaded.config;
   const projectName = getProjectName(config, cwd);
-  const agentName = getAgentName(config, projectName);
+  const agentName = getAgentName(config);
 
   const client = initSentry(config, logger);
 
