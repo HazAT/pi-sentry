@@ -1,2 +1,2 @@
 #!/bin/sh
-vp check
+vp check && vp test
