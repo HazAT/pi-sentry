@@ -1,0 +1,104 @@
+--- a/dist/core/extensions/runner.js	1985-10-26 09:15:00
++++ b/dist/core/extensions/runner.js	2026-04-01 14:00:04
+@@ -285,6 +285,23 @@
+     emitError(error) {
+         for (const listener of this.errorListeners) {
+             listener(error);
++        }
++        // Emit to extension handlers registered for "extension_error".
++        // Errors from these handlers are swallowed to prevent infinite recursion.
++        const event = { type: "extension_error", ...error };
++        const ctx = this.createContext();
++        for (const ext of this.extensions) {
++            const handlers = ext.handlers.get("extension_error");
++            if (!handlers || handlers.length === 0)
++                continue;
++            for (const handler of handlers) {
++                try {
++                    handler(event, ctx);
++                }
++                catch {
++                    // Swallow — never recurse into emitError from extension_error handlers
++                }
++            }
+         }
+     }
+     hasHandlers(eventType) {
+@@ -479,13 +496,25 @@
+             if (!handlers || handlers.length === 0)
+                 continue;
+             for (const handler of handlers) {
+-                const handlerResult = await handler(event, ctx);
+-                if (handlerResult) {
+-                    result = handlerResult;
+-                    if (result.block) {
+-                        return result;
++                try {
++                    const handlerResult = await handler(event, ctx);
++                    if (handlerResult) {
++                        result = handlerResult;
++                        if (result.block) {
++                            return result;
++                        }
+                     }
+                 }
++                catch (err) {
++                    const message = err instanceof Error ? err.message : String(err);
++                    const stack = err instanceof Error ? err.stack : undefined;
++                    this.emitError({
++                        extensionPath: ext.path,
++                        event: "tool_call",
++                        error: message,
++                        stack,
++                    });
++                }
+             }
+         }
+         return result;
+--- a/dist/core/extensions/types.d.ts	1985-10-26 09:15:00
++++ b/dist/core/extensions/types.d.ts	2026-04-01 14:00:04
+@@ -738,6 +738,7 @@
+     on(event: "tool_result", handler: ExtensionHandler<ToolResultEvent, ToolResultEventResult>): void;
+     on(event: "user_bash", handler: ExtensionHandler<UserBashEvent, UserBashEventResult>): void;
+     on(event: "input", handler: ExtensionHandler<InputEvent, InputEventResult>): void;
++    on(event: "extension_error", handler: ExtensionHandler<ExtensionErrorEvent>): void;
+     /** Register a tool that the LLM can call. */
+     registerTool<TParams extends TSchema = TSchema, TDetails = unknown, TState = any>(tool: ToolDefinition<TParams, TDetails, TState>): void;
+     /** Register a custom command. */
+@@ -1077,6 +1078,13 @@
+     runtime: ExtensionRuntime;
+ }
+ export interface ExtensionError {
++    extensionPath: string;
++    event: string;
++    error: string;
++    stack?: string;
++}
++export interface ExtensionErrorEvent {
++    type: "extension_error";
+     extensionPath: string;
+     event: string;
+     error: string;
+--- a/dist/core/extensions/index.d.ts	1985-10-26 09:15:00
++++ b/dist/core/extensions/index.d.ts	2026-04-01 14:00:04
+@@ -6,7 +6,7 @@
+ export { createExtensionRuntime, discoverAndLoadExtensions, loadExtensionFromFactory, loadExtensions, } from "./loader.js";
+ export type { ExtensionErrorListener, ForkHandler, NavigateTreeHandler, NewSessionHandler, ShutdownHandler, SwitchSessionHandler, } from "./runner.js";
+ export { ExtensionRunner } from "./runner.js";
+-export type { AgentEndEvent, AgentStartEvent, AgentToolResult, AgentToolUpdateCallback, AppendEntryHandler, AppKeybinding, BashToolCallEvent, BashToolResultEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult, BeforeProviderRequestEvent, BeforeProviderRequestEventResult, CompactOptions, ContextEvent, ContextEventResult, ContextUsage, CustomToolCallEvent, CustomToolResultEvent, EditToolCallEvent, EditToolResultEvent, ExecOptions, ExecResult, Extension, ExtensionActions, ExtensionAPI, ExtensionCommandContext, ExtensionCommandContextActions, ExtensionContext, ExtensionContextActions, ExtensionError, ExtensionEvent, ExtensionFactory, ExtensionFlag, ExtensionHandler, ExtensionRuntime, ExtensionShortcut, ExtensionUIContext, ExtensionUIDialogOptions, ExtensionWidgetOptions, FindToolCallEvent, FindToolResultEvent, GetActiveToolsHandler, GetAllToolsHandler, GetCommandsHandler, GetThinkingLevelHandler, GrepToolCallEvent, GrepToolResultEvent, InputEvent, InputEventResult, InputSource, KeybindingsManager, LoadExtensionsResult, LsToolCallEvent, LsToolResultEvent, MessageEndEvent, MessageRenderer, MessageRenderOptions, MessageStartEvent, MessageUpdateEvent, ModelSelectEvent, ModelSelectSource, ProviderConfig, ProviderModelConfig, ReadToolCallEvent, ReadToolResultEvent, RegisteredCommand, RegisteredTool, ResolvedCommand, ResourcesDiscoverEvent, ResourcesDiscoverResult, SendMessageHandler, SendUserMessageHandler, SessionBeforeCompactEvent, SessionBeforeCompactResult, SessionBeforeForkEvent, SessionBeforeForkResult, SessionBeforeSwitchEvent, SessionBeforeSwitchResult, SessionBeforeTreeEvent, SessionBeforeTreeResult, SessionCompactEvent, SessionDirectoryEvent, SessionDirectoryHandler, SessionDirectoryResult, SessionEvent, SessionForkEvent, SessionShutdownEvent, SessionStartEvent, SessionSwitchEvent, SessionTreeEvent, SetActiveToolsHandler, SetLabelHandler, SetModelHandler, SetThinkingLevelHandler, TerminalInputHandler, ToolCallEvent, ToolCallEventResult, ToolDefinition, ToolExecutionEndEvent, ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolInfo, ToolRenderResultOptions, ToolResultEvent, ToolResultEventResult, TreePreparation, TurnEndEvent, TurnStartEvent, UserBashEvent, UserBashEventResult, WidgetPlacement, WriteToolCallEvent, WriteToolResultEvent, } from "./types.js";
++export type { AgentEndEvent, AgentStartEvent, AgentToolResult, AgentToolUpdateCallback, AppendEntryHandler, AppKeybinding, BashToolCallEvent, BashToolResultEvent, BeforeAgentStartEvent, BeforeAgentStartEventResult, BeforeProviderRequestEvent, BeforeProviderRequestEventResult, CompactOptions, ContextEvent, ContextEventResult, ContextUsage, CustomToolCallEvent, CustomToolResultEvent, EditToolCallEvent, EditToolResultEvent, ExecOptions, ExecResult, Extension, ExtensionActions, ExtensionAPI, ExtensionCommandContext, ExtensionCommandContextActions, ExtensionContext, ExtensionContextActions, ExtensionError, ExtensionErrorEvent, ExtensionEvent, ExtensionFactory, ExtensionFlag, ExtensionHandler, ExtensionRuntime, ExtensionShortcut, ExtensionUIContext, ExtensionUIDialogOptions, ExtensionWidgetOptions, FindToolCallEvent, FindToolResultEvent, GetActiveToolsHandler, GetAllToolsHandler, GetCommandsHandler, GetThinkingLevelHandler, GrepToolCallEvent, GrepToolResultEvent, InputEvent, InputEventResult, InputSource, KeybindingsManager, LoadExtensionsResult, LsToolCallEvent, LsToolResultEvent, MessageEndEvent, MessageRenderer, MessageRenderOptions, MessageStartEvent, MessageUpdateEvent, ModelSelectEvent, ModelSelectSource, ProviderConfig, ProviderModelConfig, ReadToolCallEvent, ReadToolResultEvent, RegisteredCommand, RegisteredTool, ResolvedCommand, ResourcesDiscoverEvent, ResourcesDiscoverResult, SendMessageHandler, SendUserMessageHandler, SessionBeforeCompactEvent, SessionBeforeCompactResult, SessionBeforeForkEvent, SessionBeforeForkResult, SessionBeforeSwitchEvent, SessionBeforeSwitchResult, SessionBeforeTreeEvent, SessionBeforeTreeResult, SessionCompactEvent, SessionDirectoryEvent, SessionDirectoryHandler, SessionDirectoryResult, SessionEvent, SessionForkEvent, SessionShutdownEvent, SessionStartEvent, SessionSwitchEvent, SessionTreeEvent, SetActiveToolsHandler, SetLabelHandler, SetModelHandler, SetThinkingLevelHandler, TerminalInputHandler, ToolCallEvent, ToolCallEventResult, ToolDefinition, ToolExecutionEndEvent, ToolExecutionStartEvent, ToolExecutionUpdateEvent, ToolInfo, ToolRenderResultOptions, ToolResultEvent, ToolResultEventResult, TreePreparation, TurnEndEvent, TurnStartEvent, UserBashEvent, UserBashEventResult, WidgetPlacement, WriteToolCallEvent, WriteToolResultEvent, } from "./types.js";
+ export { isBashToolResult, isEditToolResult, isFindToolResult, isGrepToolResult, isLsToolResult, isReadToolResult, isToolCallEventType, isWriteToolResult, } from "./types.js";
+ export { wrapRegisteredTool, wrapRegisteredTools } from "./wrapper.js";
+ //# sourceMappingURL=index.d.ts.map
+\ No newline at end of file
+--- a/dist/index.d.ts	1985-10-26 09:15:00
++++ b/dist/index.d.ts	2026-04-01 14:00:04
+@@ -3,7 +3,7 @@
+ export { type ApiKeyCredential, type AuthCredential, AuthStorage, type AuthStorageBackend, FileAuthStorageBackend, InMemoryAuthStorageBackend, type OAuthCredential, } from "./core/auth-storage.js";
+ export { type BranchPreparation, type BranchSummaryResult, type CollectEntriesResult, type CompactionResult, type CutPointResult, calculateContextTokens, collectEntriesForBranchSummary, compact, DEFAULT_COMPACTION_SETTINGS, estimateTokens, type FileOperations, findCutPoint, findTurnStartIndex, type GenerateBranchSummaryOptions, generateBranchSummary, generateSummary, getLastAssistantUsage, prepareBranchEntries, serializeConversation, shouldCompact, } from "./core/compaction/index.js";
+ export { createEventBus, type EventBus, type EventBusController } from "./core/event-bus.js";
+-export type { AgentEndEvent, AgentStartEvent, AgentToolResult, AgentToolUpdateCallback, AppKeybinding, BashToolCallEvent, BeforeAgentStartEvent, BeforeProviderRequestEvent, BeforeProviderRequestEventResult, CompactOptions, ContextEvent, ContextUsage, CustomToolCallEvent, EditToolCallEvent, ExecOptions, ExecResult, Extension, ExtensionActions, ExtensionAPI, ExtensionCommandContext, ExtensionCommandContextActions, ExtensionContext, ExtensionContextActions, ExtensionError, ExtensionEvent, ExtensionFactory, ExtensionFlag, ExtensionHandler, ExtensionRuntime, ExtensionShortcut, ExtensionUIContext, ExtensionUIDialogOptions, ExtensionWidgetOptions, FindToolCallEvent, GrepToolCallEvent, InputEvent, InputEventResult, InputSource, KeybindingsManager, LoadExtensionsResult, LsToolCallEvent, MessageRenderer, MessageRenderOptions, ProviderConfig, ProviderModelConfig, ReadToolCallEvent, RegisteredCommand, RegisteredTool, ResolvedCommand, SessionBeforeCompactEvent, SessionBeforeForkEvent, SessionBeforeSwitchEvent, SessionBeforeTreeEvent, SessionCompactEvent, SessionForkEvent, SessionShutdownEvent, SessionStartEvent, SessionSwitchEvent, SessionTreeEvent, SlashCommandInfo, SlashCommandSource, SourceInfo, TerminalInputHandler, ToolCallEvent, ToolCallEventResult, ToolDefinition, ToolInfo, ToolRenderResultOptions, ToolResultEvent, TurnEndEvent, TurnStartEvent, UserBashEvent, UserBashEventResult, WidgetPlacement, WriteToolCallEvent, } from "./core/extensions/index.js";
++export type { AgentEndEvent, AgentStartEvent, AgentToolResult, AgentToolUpdateCallback, AppKeybinding, BashToolCallEvent, BeforeAgentStartEvent, BeforeProviderRequestEvent, BeforeProviderRequestEventResult, CompactOptions, ContextEvent, ContextUsage, CustomToolCallEvent, EditToolCallEvent, ExecOptions, ExecResult, Extension, ExtensionActions, ExtensionAPI, ExtensionCommandContext, ExtensionCommandContextActions, ExtensionContext, ExtensionContextActions, ExtensionError, ExtensionErrorEvent, ExtensionEvent, ExtensionFactory, ExtensionFlag, ExtensionHandler, ExtensionRuntime, ExtensionShortcut, ExtensionUIContext, ExtensionUIDialogOptions, ExtensionWidgetOptions, FindToolCallEvent, GrepToolCallEvent, InputEvent, InputEventResult, InputSource, KeybindingsManager, LoadExtensionsResult, LsToolCallEvent, MessageRenderer, MessageRenderOptions, ProviderConfig, ProviderModelConfig, ReadToolCallEvent, RegisteredCommand, RegisteredTool, ResolvedCommand, SessionBeforeCompactEvent, SessionBeforeForkEvent, SessionBeforeSwitchEvent, SessionBeforeTreeEvent, SessionCompactEvent, SessionForkEvent, SessionShutdownEvent, SessionStartEvent, SessionSwitchEvent, SessionTreeEvent, SlashCommandInfo, SlashCommandSource, SourceInfo, TerminalInputHandler, ToolCallEvent, ToolCallEventResult, ToolDefinition, ToolInfo, ToolRenderResultOptions, ToolResultEvent, TurnEndEvent, TurnStartEvent, UserBashEvent, UserBashEventResult, WidgetPlacement, WriteToolCallEvent, } from "./core/extensions/index.js";
+ export { createExtensionRuntime, discoverAndLoadExtensions, ExtensionRunner, isBashToolResult, isEditToolResult, isFindToolResult, isGrepToolResult, isLsToolResult, isReadToolResult, isToolCallEventType, isWriteToolResult, wrapRegisteredTool, wrapRegisteredTools, } from "./core/extensions/index.js";
+ export type { ReadonlyFooterDataProvider } from "./core/footer-data-provider.js";
+ export { convertToLlm } from "./core/messages.js";
