@@ -1,5 +1,3 @@
-import { createSentrySDK, SentryError } from "sentry";
-
 export interface CLIResult {
   stdout: string;
   stderr: string;
@@ -52,50 +50,73 @@ function formatResult(result: unknown): string {
   return JSON.stringify(result, null, 2);
 }
 
-function formatError(error: unknown, fallbackPrefix: string): CLIResult {
+/**
+ * Lazy-load the sentry SDK to avoid its ESM loader hooks from interfering
+ * with other extensions' module resolution at import time.
+ */
+async function loadSDK() {
+  const { createSentrySDK, SentryError } = await import("sentry");
+  return { sdk: createSentrySDK(), SentryError };
+}
+
+function formatError(
+  error: unknown,
+  fallbackPrefix: string,
+  SentryError: new (...args: any[]) => Error & { exitCode: number; stderr: string },
+): CLIResult {
   if (error instanceof SentryError) {
+    const sentryErr = error as Error & { exitCode: number; stderr: string };
     return {
       stdout: "",
-      stderr: [error.message, error.stderr].filter(Boolean).join("\n"),
-      code: error.exitCode ?? 1,
+      stderr: [sentryErr.message, sentryErr.stderr].filter(Boolean).join("\n"),
+      code: sentryErr.exitCode ?? 1,
     };
   }
   return { stdout: "", stderr: `${fallbackPrefix}: ${String(error)}`, code: 1 };
 }
 
 export function createSentryCLI(): SentryCLI {
-  const sdk = createSentrySDK();
+  // Lazy-load once, cache the promise so all methods share the same SDK instance
+  let loaded: ReturnType<typeof loadSDK> | undefined;
+  function getSDK() {
+    loaded ??= loadSDK();
+    return loaded;
+  }
 
   return {
     async run(command, _options) {
+      const { sdk, SentryError } = await getSDK();
       try {
         const args = splitCommand(command);
         const result = await sdk.run(...args);
         return { stdout: formatResult(result), stderr: "", code: 0 };
       } catch (error) {
-        return formatError(error, "Sentry CLI error");
+        return formatError(error, "Sentry CLI error", SentryError);
       }
     },
 
     async authStatus() {
+      const { sdk, SentryError } = await getSDK();
       try {
         const result = await sdk.auth.status();
         return { stdout: formatResult(result), stderr: "", code: 0 };
       } catch (error) {
-        return formatError(error, "Auth status error");
+        return formatError(error, "Auth status error", SentryError);
       }
     },
 
     async authLogin() {
+      const { sdk, SentryError } = await getSDK();
       try {
         await sdk.auth.login();
         return { stdout: "Successfully authenticated", stderr: "", code: 0 };
       } catch (error) {
-        return formatError(error, "Auth login error");
+        return formatError(error, "Auth login error", SentryError);
       }
     },
 
     async issueList(options) {
+      const { sdk } = await getSDK();
       return await sdk.issue.list(options);
     },
   };
