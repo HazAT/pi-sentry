@@ -75,10 +75,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
     if (!d?.monitoring) {
       lines.push(
-        theme.fg("warning", "▲ Sentry") + theme.fg("muted", " · tool only (no DSN configured)"),
+        theme.inverse(theme.fg("warning", " ▲ SENTRY ")) +
+          " " +
+          theme.fg("muted", "tool only (no DSN configured)"),
       );
     } else {
-      lines.push(theme.fg("success", "▲ Sentry") + theme.fg("muted", " · monitoring active"));
+      lines.push(
+        theme.inverse(theme.fg("success", " ▲ SENTRY ")) +
+          " " +
+          theme.fg("success", "monitoring active"),
+      );
       if (expanded) {
         const dim = (label: string, value: string) =>
           `  ${theme.fg("muted", label + ":")} ${value}`;
