@@ -1,203 +1,199 @@
 ---
 name: sentry-cli
-description: Query Sentry data — issues, traces, spans, logs. Use when asked to "check Sentry", "look at issues", "view traces", "debug with Sentry", "what's happening in Sentry", "check my traces", "look at errors", "find my trace", or "query Sentry".
+description: Guide for using the Sentry CLI to inspect issues, events, traces, spans, logs, dashboards, organizations, projects, and authenticated API data from this repo via the `sentry` tool.
 ---
 
-# Sentry CLI Skill
+# Sentry CLI Usage Guide
 
-Use the `sentry` tool to query Sentry. The `command` parameter is exactly what you'd type after `sentry` on the command line.
+Use the `sentry` tool to run the Sentry CLI. The `command` value is exactly what you would type after `sentry` on the command line.
 
 ```typescript
 sentry({ command: "issue list --limit 5" });
-sentry({ command: "trace view <trace-id> --json" });
+sentry({ command: "trace view abc123def456 --json" });
 ```
 
-Full docs: https://cli.sentry.dev
+## Agent Guidance
 
----
+### Key principles
 
-## Quick Reference
+- Just run the command. Do not require `auth status` before every read operation.
+- Prefer CLI commands over raw API calls. Use `issue`, `trace`, `span`, `log`, `dashboard`, `org`, and `project` commands before `api`.
+- Use `schema` to explore the API when you need an endpoint the dedicated commands do not cover.
+- Use `issue view PROJ-123` directly when you already know the short ID.
+- Use `--json` for machine-readable output and `--fields` to keep results small.
+- The CLI can auto-detect org and project context. Only add explicit scoping when detection fails or resolves to the wrong target.
 
-| Task                  | Tool call                                               |
-| --------------------- | ------------------------------------------------------- |
-| Check auth            | `sentry({ command: "auth status" })`                    |
-| List issues           | `sentry({ command: "issue list" })`                     |
-| View issue            | `sentry({ command: "issue view <id>" })`                |
-| Explain issue with AI | `sentry({ command: "issue explain <id>" })`             |
-| Get fix plan          | `sentry({ command: "issue plan <id>" })`                |
-| List traces           | `sentry({ command: "trace list" })`                     |
-| View trace            | `sentry({ command: "trace view <trace-id>" })`          |
-| List spans in trace   | `sentry({ command: "span list <trace-id>" })`           |
-| View span             | `sentry({ command: "span view <trace-id>/<span-id>" })` |
-| List logs             | `sentry({ command: "log list" })`                       |
-| View trace logs       | `sentry({ command: "trace logs <trace-id>" })`          |
-| List dashboards       | `sentry({ command: "dashboard list" })`                 |
-| View dashboard        | `sentry({ command: "dashboard view <id>" })`            |
-| Raw API call          | `sentry({ command: "api /projects/" })`                 |
-| Browse API schema     | `sentry({ command: "schema" })`                         |
+### Design principles
 
----
+The CLI follows `gh`-style conventions:
 
-## Auth
+- Subcommands are noun-first, for example `issue list`, `trace view`, `org view`.
+- `--json` is for structured output.
+- `--fields` selects fields.
+- `-q` and `--query` apply Sentry search syntax.
+- `-n` and `--limit` cap results.
+- `-w` and `--web` open supported views in the browser.
 
-Check auth status before querying:
+For raw HTTP access, `api` behaves like a small `curl` wrapper:
+
+- `--method` sets the HTTP method.
+- `--data` sends a request body.
+- `--header` adds headers.
+
+### Context window tips
+
+- Prefer `--json --fields ...` over wide human-readable tables.
+- Use `--limit` aggressively.
+- Prefer direct lookup by ID over list-then-filter when you already have the identifier.
+- Use `--period` or `-t` for time filtering. Do not teach or rely on `--since`.
+
+### Safety rules
+
+- Confirm with the user before destructive commands such as `project delete` or `trial start`.
+- For mutations, verify the org and project context before taking the next action.
+- Never print or store auth tokens.
+- If auto-detection picks the wrong org or project, rerun with explicit positional scoping.
+
+## Workflow patterns
+
+### Investigate an issue
 
 ```typescript
-sentry({ command: "auth status" });
-```
+// 1. Find recent unresolved issues
+sentry({ command: 'issue list --query "is:unresolved" --limit 5' });
 
-If not authenticated, the tool will automatically open the user's browser for login when you run any command. Just run your command — auth is handled for you.
-
-You can also explicitly trigger login:
-
-```typescript
-sentry({ command: "auth login" });
-```
-
----
-
-## Issues
-
-```typescript
-// List recent issues
-sentry({ command: "issue list --limit 10" });
-
-// Filter by project, status, date
-sentry({ command: "issue list --project my-project --status unresolved --limit 20" });
-
-// View full issue details
+// 2. View a specific issue
 sentry({ command: "issue view PROJ-123" });
 
-// AI explanation
+// 3. Ask for AI root cause analysis
 sentry({ command: "issue explain PROJ-123" });
 
-// AI-generated fix plan
+// 4. Ask for a fix plan
 sentry({ command: "issue plan PROJ-123" });
 ```
 
-Use `--json` to get machine-readable output. Use `--fields` to limit columns:
+### Explore traces and performance
 
 ```typescript
-sentry({ command: "issue list --json --fields id,title,status,firstSeen" });
-```
+// 1. List recent traces
+sentry({ command: "trace list --limit 5" });
 
----
-
-## Traces & Spans
-
-```typescript
-// List recent traces
-sentry({ command: "trace list --limit 10" });
-
-// Filter by project and time window
-sentry({ command: "trace list --project my-project --since 1h --limit 20" });
-
-// View full trace (tree of spans)
+// 2. View one trace
 sentry({ command: "trace view abc123def456" });
 
-// JSON for programmatic use
-sentry({ command: "trace view abc123def456 --json" });
-
-// List spans in a trace
+// 3. List spans in the trace
 sentry({ command: "span list abc123def456" });
 
-// View a specific span
-sentry({ command: "span view abc123def456/span-id-here" });
-```
-
----
-
-## Logs
-
-```typescript
-// List recent logs
-sentry({ command: "log list --limit 20" });
-
-// Filter by project
-sentry({ command: "log list --project my-project --limit 50" });
-
-// Logs associated with a trace
+// 4. View logs associated with the trace
 sentry({ command: "trace logs abc123def456" });
 ```
 
----
-
-## Finding Your Own Traces
-
-The Sentry extension instruments pi agent sessions as distributed traces. Each trace has:
-
-- **`gen_ai.agent.name`** — set to the project directory name (or `agentName` in config)
-- **Project** — configured in `.pi/sentry.json`
-
-To find traces from the current session:
+### Stream logs
 
 ```typescript
-// Find recent traces by project
-sentry({ command: "trace list --project my-project --since 1h --limit 10" });
+sentry({ command: "log list --follow" });
+sentry({ command: 'log list --query "severity:error"' });
+```
 
-// Inspect a trace (see all tool calls as spans)
+### Explore the API schema
+
+```typescript
+sentry({ command: "schema" });
+sentry({ command: "schema issues" });
+sentry({
+  command:
+    'schema "GET /api/0/organizations/{organization_id_or_slug}/issues/"',
+});
+```
+
+### Arbitrary API access
+
+```typescript
+sentry({ command: "api /api/0/organizations/my-org/" });
+sentry({
+  command:
+    `api /api/0/organizations/my-org/projects/ --method POST --data '{"name":"new-project","platform":"python"}'`,
+});
+```
+
+## Quick reference
+
+### Time filtering
+
+Use `--period` or `-t`:
+
+```typescript
+sentry({ command: "trace list --period 1h" });
+sentry({ command: "span list --period 24h" });
+sentry({ command: "span list -t 7d" });
+```
+
+### Explicit org and project scoping
+
+Org and project are positional when you need to override auto-detection:
+
+```typescript
+sentry({ command: "trace list my-org/my-project --limit 5" });
+sentry({ command: "issue list my-org/my-project --limit 10" });
+sentry({ command: "span list my-org/my-project/abc123def456" });
+```
+
+### Listing spans in a trace
+
+```typescript
+sentry({ command: "span list abc123def456" });
+sentry({ command: "span list my-org/my-project/abc123def456" });
+```
+
+### Structured output
+
+```typescript
+sentry({
+  command:
+    "issue list --json --fields shortId,title,priority,level,status --limit 10",
+});
+sentry({ command: "trace view abc123def456 --json" });
+```
+
+### Browser views
+
+```typescript
+sentry({ command: "issue view PROJ-123 --web" });
+sentry({ command: "dashboard view <dashboard-id> --web" });
+```
+
+## Repo-specific note
+
+This repo emits distributed traces for agent sessions. To inspect recent activity from the extension:
+
+```typescript
+sentry({ command: "trace list --period 1h --limit 10" });
 sentry({ command: "trace view <trace-id>" });
-
-// View logs captured during a trace
 sentry({ command: "trace logs <trace-id>" });
 ```
 
-The trace root span is named after the first user message. Each tool call (bash, read, write, edit) becomes a child span with inputs and outputs as attributes.
-
-If traces aren't appearing:
-
-1. Check `sentry({ command: "auth status" })` — are you authenticated?
-2. Confirm the Sentry extension is installed: `pi list | grep sentry`
-3. Traces flush at the end of each turn — wait for the current turn to complete
-4. Check that DSN is correct in `.pi/sentry.json` or `~/.pi/agent/sentry.json`
-
----
-
-## Dashboards
+If the inferred target is wrong, rerun with explicit positional scoping:
 
 ```typescript
-// List dashboards
-sentry({ command: "dashboard list" });
-
-// View a dashboard
-sentry({ command: "dashboard view <id>" });
-
-// Create a dashboard (opens browser)
-sentry({ command: "dashboard create -w" });
+sentry({ command: "trace list my-org/my-project --period 1h --limit 10" });
 ```
 
----
+## Dashboard layout
 
-## Raw API Access
+Sentry dashboards use a 6-column grid.
 
-For anything not covered by named commands:
+- `big_number` is width 2 and height 1, so three fit in one row.
+- `line`, `area`, and `bar` are width 3 and height 2, so two fit in one row.
+- `table` is width 6 and height 2, so it takes a full row.
 
-```typescript
-// Call any Sentry REST API endpoint
-sentry({ command: "api /projects/" });
-sentry({ command: "api /organizations/my-org/issues/?query=is:unresolved" });
+Use common display types unless the user explicitly wants a specialized or internal widget.
 
-// Browse available endpoints
-sentry({ command: "schema" });
-```
+## Common mistakes
 
----
-
-## Useful Flags
-
-| Flag                         | Effect                       |
-| ---------------------------- | ---------------------------- |
-| `--json`                     | Machine-readable JSON output |
-| `--fields id,title,status`   | Limit output columns         |
-| `--limit N`                  | Cap result count             |
-| `--since 1h` / `--since 24h` | Time window filter           |
-| `--project <slug>`           | Filter by project            |
-| `-w`                         | Open result in browser       |
-
-**Always use `--json` when parsing output programmatically.**
-
-Example — get issue IDs and titles only:
-
-```typescript
-sentry({ command: "issue list --json --fields id,title --limit 5" });
-```
+- Do not use numeric issue IDs when the user has a short ID like `PROJ-123`.
+- Do not pre-authenticate unless you actually need to change accounts or diagnose auth.
+- Do not skip `--json` when you need to parse the result.
+- Do not force explicit org and project flags when auto-detection is likely to work.
+- Do not treat `--query` as free text. It uses Sentry search syntax.
+- Do not teach `--since`; use `--period` or `-t`.
+- Do not jump to `api` if a dedicated CLI command already exists.
