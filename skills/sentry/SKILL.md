@@ -1,9 +1,9 @@
 ---
-name: sentry-cli
+name: sentry
 description: Guide for using the Sentry CLI to inspect issues, events, traces, spans, logs, dashboards, organizations, projects, and authenticated API data from this repo via the `sentry` tool.
 ---
 
-# Sentry CLI Usage Guide
+# Sentry Skill
 
 Use the `sentry` tool to run the Sentry CLI. The `command` value is exactly what you would type after `sentry` on the command line.
 

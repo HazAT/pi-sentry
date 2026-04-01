@@ -22,7 +22,8 @@ export function createSentryTool(cli: SentryCLI) {
     promptSnippet:
       "sentry - Run Sentry CLI commands (issue list, trace view, log list, auth status, etc.)",
     promptGuidelines: [
-      "Before using the sentry tool, load the `sentry-cli` skill once for full usage guidance, workflows, and examples.",
+      "Before using the sentry tool, load the `sentry` skill once for full usage guidance, workflows, and examples.",
+      "If the user asks to check Sentry, inspect traces, issues, spans, logs, dashboards, or events, invoke the `sentry` skill before the first sentry tool call.",
       "The sentry tool runs Sentry CLI commands. Pass the full command after 'sentry', e.g. sentry({ command: \"issue list --limit 5 --json\" })",
       "Use --json flag for machine-readable output when you need to parse results",
       "Use --fields to limit output columns and reduce noise",
