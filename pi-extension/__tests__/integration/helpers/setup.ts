@@ -29,6 +29,10 @@ export interface TestSessionContext {
 export interface TestSessionOptions {
   /** Set to null to disable DSN (no monitoring). Default: auto from mock server. */
   dsn?: string | null;
+  /** Opt in to request/tool input capture for tests that need it. */
+  recordInputs?: boolean;
+  /** Opt in to request/tool output capture for tests that need it. */
+  recordOutputs?: boolean;
   /** Canned responses for the faux model. Default: single "Hello!" text response. */
   responses?: FauxResponseStep[];
   /** Additional extension file paths to load alongside the Sentry extension. */
@@ -55,6 +59,8 @@ export async function createTestSession(
   // Save env state
   const prevDsn = process.env.PI_SENTRY_DSN;
   const prevSentryDsn = process.env.SENTRY_DSN;
+  const prevRecordInputs = process.env.PI_SENTRY_RECORD_INPUTS;
+  const prevRecordOutputs = process.env.PI_SENTRY_RECORD_OUTPUTS;
 
   // Configure DSN
   const dsn = options.dsn === undefined ? server.dsn : options.dsn;
@@ -63,6 +69,14 @@ export async function createTestSession(
   } else {
     delete process.env.PI_SENTRY_DSN;
     delete process.env.SENTRY_DSN;
+  }
+
+  if (options.recordInputs !== undefined) {
+    process.env.PI_SENTRY_RECORD_INPUTS = String(options.recordInputs);
+  }
+
+  if (options.recordOutputs !== undefined) {
+    process.env.PI_SENTRY_RECORD_OUTPUTS = String(options.recordOutputs);
   }
 
   // Register faux provider
@@ -129,7 +143,29 @@ export async function createTestSession(
     } else {
       delete process.env.SENTRY_DSN;
     }
+    if (prevRecordInputs !== undefined) {
+      process.env.PI_SENTRY_RECORD_INPUTS = prevRecordInputs;
+    } else {
+      delete process.env.PI_SENTRY_RECORD_INPUTS;
+    }
+    if (prevRecordOutputs !== undefined) {
+      process.env.PI_SENTRY_RECORD_OUTPUTS = prevRecordOutputs;
+    } else {
+      delete process.env.PI_SENTRY_RECORD_OUTPUTS;
+    }
   }
 
   return { session, server, faux, cleanup };
+}
+
+export async function withTestSession<T>(
+  options: TestSessionOptions,
+  run: (ctx: TestSessionContext) => Promise<T>,
+): Promise<T> {
+  const ctx = await createTestSession(options);
+  try {
+    return await run(ctx);
+  } finally {
+    await ctx.cleanup();
+  }
 }

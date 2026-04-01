@@ -45,6 +45,22 @@ describe("serializeAttribute", () => {
     expect(result.outer.safe).toBe("visible");
   });
 
+  it("redacts sensitive fields inside JSON strings", () => {
+    const input = JSON.stringify({
+      name: "test",
+      nested: { bearer: "secret-token", safe: "visible" },
+    });
+    const result = JSON.parse(serializeAttribute(input, 10000));
+    expect(result.name).toBe("test");
+    expect(result.nested.bearer).toBe("[REDACTED]");
+    expect(result.nested.safe).toBe("visible");
+  });
+
+  it("leaves non-JSON strings untouched", () => {
+    const input = "Authorization: Bearer secret-token";
+    expect(serializeAttribute(input, 10000)).toBe(input);
+  });
+
   it("handles circular references", () => {
     const obj: any = { name: "test" };
     obj.self = obj;

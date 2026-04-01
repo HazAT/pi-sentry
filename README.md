@@ -2,6 +2,8 @@
 
 Full [Sentry](https://sentry.io) observability for [pi](https://github.com/badlogic/pi-mono) coding agent sessions — distributed tracing, error capture, and a built-in Sentry CLI tool.
 
+Monitoring is safe by default: traces are on, but tool inputs and outputs are not captured unless you opt in.
+
 ## What It Does
 
 **Monitoring** — Every agent session becomes a Sentry trace. Tool calls, LLM requests, token usage, and errors are captured as spans with full [AI Agent Monitoring](https://docs.sentry.io/product/ai-monitoring/) attributes.
@@ -16,7 +18,7 @@ gen_ai.invoke_agent (per user interaction)
 └── gen_ai.request (per LLM request — model, tokens, latency)
 ```
 
-Each user message starts a new trace. Tool inputs/outputs and LLM responses are captured as span attributes.
+Each user message starts a new trace. Tool inputs/outputs and LLM responses are captured only when you opt in with `recordInputs` and `recordOutputs`.
 
 ## Install
 
@@ -42,7 +44,17 @@ Create `.pi/sentry.json` (or `.jsonc`):
 }
 ```
 
-That's it. Traces flow immediately. The Sentry CLI tool works even without a DSN — monitoring is optional.
+That's it. Traces flow immediately. The Sentry CLI tool works even without a DSN — monitoring is optional. If you want request text or tool payloads in Sentry, opt in explicitly:
+
+```json
+{
+  "dsn": "https://your-key@o123.ingest.sentry.io/456",
+  "recordInputs": true,
+  "recordOutputs": true
+}
+```
+
+By default, `recordInputs` and `recordOutputs` are `false`, so the extension captures structure and timing without storing conversation or tool content.
 
 ### Config File Locations (first match wins)
 
@@ -56,8 +68,8 @@ That's it. Traces flow immediately. The Sentry CLI tool works even without a DSN
 |---|---|
 | `PI_SENTRY_DSN` / `SENTRY_DSN` | Sentry DSN |
 | `PI_SENTRY_TRACES_SAMPLE_RATE` | Sample rate (0–1) |
-| `PI_SENTRY_RECORD_INPUTS` | Capture tool inputs (true/false) |
-| `PI_SENTRY_RECORD_OUTPUTS` | Capture tool outputs (true/false) |
+| `PI_SENTRY_RECORD_INPUTS` | Capture tool inputs (true/false, default `false`) |
+| `PI_SENTRY_RECORD_OUTPUTS` | Capture tool outputs (true/false, default `false`) |
 | `PI_SENTRY_ENABLE_METRICS` | Emit token usage metrics (true/false) |
 | `PI_SENTRY_TAGS` | Custom tags (`key:value,key:value`) |
 | `SENTRY_ENVIRONMENT` | Environment name |
@@ -74,8 +86,8 @@ That's it. Traces flow immediately. The Sentry CLI tool works even without a DSN
   "debug": false,
   "agentName": "my-agent",
   "projectName": "my-project",
-  "recordInputs": true,
-  "recordOutputs": true,
+  "recordInputs": false,
+  "recordOutputs": false,
   "maxAttributeLength": 12000,
   "includeMessageUsageSpans": true,
   "includeSessionEvents": true,
@@ -86,6 +98,8 @@ That's it. Traces flow immediately. The Sentry CLI tool works even without a DSN
   }
 }
 ```
+
+To capture content when you need it, enable `recordInputs` and `recordOutputs` in config or via the matching environment variables.
 
 ## Sentry CLI Tool
 
@@ -130,6 +144,9 @@ pi -e ./pi-extension/index.ts
 # Checks (all must pass before commit)
 vp check       # format + lint + typecheck
 vp test        # run tests
+
+# Optional maintainer-only patch helper
+npm run patch:apply
 ```
 
 ## License

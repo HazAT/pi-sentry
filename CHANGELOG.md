@@ -2,6 +2,12 @@
 
 All notable changes to the Sentry extension are documented here.
 
+## [Unreleased]
+
+### Changed
+- **Safe-by-default capture** — monitoring still enables traces, but tool inputs and outputs now default to `false` so content capture is opt-in.
+- **No install-time patching** — the `extension_error` / `tool_call` upstream patch is now maintained as an explicit repo command instead of running automatically during `npm install`.
+
 ## [0.1.11] - 2026-03-19
 
 ### Fixed

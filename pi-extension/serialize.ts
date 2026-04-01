@@ -1,6 +1,14 @@
 const SENSITIVE_KEY_PATTERN =
   /(api[-_]?key|token|secret|password|authorization|cookie|session|bearer|x-api-key)/i;
 
+function looksLikeJson(value: string): boolean {
+  const trimmed = value.trim();
+  return (
+    (trimmed.startsWith("{") && trimmed.endsWith("}")) ||
+    (trimmed.startsWith("[") && trimmed.endsWith("]"))
+  );
+}
+
 function redact(value: unknown, seen: WeakSet<object>, depth: number): unknown {
   if (depth > 8) {
     return "[DepthLimit]";
@@ -52,7 +60,17 @@ function truncate(value: string, maxLength: number): string {
 }
 
 export function serializeAttribute(value: unknown, maxLength: number): string {
-  const redacted = redact(value, new WeakSet<object>(), 0);
+  let redacted: unknown = value;
+
+  if (typeof value === "string" && looksLikeJson(value)) {
+    try {
+      redacted = redact(JSON.parse(value), new WeakSet<object>(), 0);
+    } catch {
+      redacted = value;
+    }
+  } else {
+    redacted = redact(value, new WeakSet<object>(), 0);
+  }
 
   if (typeof redacted === "string") {
     return truncate(redacted, maxLength);

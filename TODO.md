@@ -1,23 +1,11 @@
-# TODO
+# Maintenance Notes
 
-## When `extension_error` event lands upstream in pi-coding-agent
+The `extension_error` / `tool_call` fixes are still carried locally in `patches/extension-error-event.patch`, but they are now applied only by maintainers when they explicitly run `npm run patch:apply`.
 
-Tracking: https://github.com/HazAT/pi-mono/tree/feat/extension-error-event
+When the upstream `@mariozechner/pi-coding-agent` release includes those changes, we should:
 
-### What the patch does
-
-Two changes to `ExtensionRunner` in `@mariozechner/pi-coding-agent`:
-
-1. **`extension_error` event** — `emitError()` dispatches to extension handlers registered for `"extension_error"`, so extensions (like this one) can capture errors from other extensions. Errors from these handlers are swallowed to prevent infinite recursion.
-
-2. **`emitToolCall` try/catch** — was the only emit method without error handling. A throwing `tool_call` handler would crash the process. Now routes errors through `emitError()` like all other emit methods.
-
-### Steps to remove the patch
-
-1. Update `@mariozechner/pi-coding-agent` to the version that includes these changes
-2. Delete `patches/extension-error-event.patch`
-3. Delete `scripts/apply-patches.mjs`
-4. Remove the `"postinstall"` script from `package.json`
-5. Remove the `as any` cast from `pi.on("extension_error" as any, ...)` in `pi-extension/index.ts`
-6. Run `npm install && vp check && vp test` — all 63 tests should pass
-7. Delete this file
+1. Remove `patches/extension-error-event.patch`
+2. Delete `scripts/apply-patches.mjs`
+3. Remove `patch:apply` from `package.json`
+4. Drop the `as any` cast from `pi.on("extension_error" as any, ...)` in `pi-extension/index.ts`
+5. Run `npm install && vp check && vp test`

@@ -12,36 +12,66 @@ export interface SentryCLI {
 }
 
 /**
- * Split a command string into args, respecting single and double quotes.
+ * Split a command string into args, respecting quotes and simple backslash escapes.
  * e.g. `issue list --query "is:unresolved assigned:me"` → ["issue", "list", "--query", "is:unresolved assigned:me"]
  */
 export function splitCommand(command: string): string[] {
   const args: string[] = [];
   let current = "";
   let quote: string | null = null;
+  let escaped = false;
+
+  const pushCurrent = () => {
+    if (current.length > 0) {
+      args.push(current);
+      current = "";
+    }
+  };
 
   for (let i = 0; i < command.length; i++) {
     const ch = command[i];
-    if (quote) {
+    if (escaped) {
+      current += ch;
+      escaped = false;
+      continue;
+    }
+
+    if (quote === "'") {
       if (ch === quote) {
         quote = null;
       } else {
         current += ch;
       }
-    } else if (ch === '"' || ch === "'") {
+      continue;
+    }
+
+    if (quote === '"') {
+      if (ch === quote) {
+        quote = null;
+      } else if (ch === "\\") {
+        escaped = true;
+      } else {
+        current += ch;
+      }
+      continue;
+    }
+
+    if (ch === '"' || ch === "'") {
       quote = ch;
     } else if (/\s/.test(ch)) {
-      if (current.length > 0) {
-        args.push(current);
-        current = "";
-      }
+      pushCurrent();
+    } else if (ch === "\\") {
+      escaped = true;
     } else {
       current += ch;
     }
   }
-  if (current.length > 0) {
-    args.push(current);
+
+  if (escaped) {
+    current += "\\";
   }
+
+  pushCurrent();
   return args;
 }
 

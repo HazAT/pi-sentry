@@ -3,7 +3,7 @@ import { Box, Text } from "@mariozechner/pi-tui";
 import { createSentryCLI } from "./sentry-cli.js";
 import * as Sentry from "@sentry/node-core/light";
 import { initWithoutDefaultIntegrations, type LightNodeClient } from "@sentry/node-core/light";
-import { conversationIdIntegration } from "@sentry/core";
+import { conversationIdIntegration, getClient } from "@sentry/core";
 import { loadPluginConfig, type ResolvedPluginConfig } from "./config.js";
 import { createLogger, getProjectName, getAgentName } from "./helpers.js";
 import { createSentryTool } from "./tool.js";
@@ -11,6 +11,24 @@ import { SessionTracer } from "./tracing.js";
 
 let sentryInitialized = false;
 let initializedDsn: string | null = null;
+let sharedClient: LightNodeClient | undefined;
+let sharedClientRefCount = 0;
+const beforeExitCleanups = new Set<() => void>();
+
+function onBeforeExit(): void {
+  for (const cleanup of beforeExitCleanups) {
+    cleanup();
+  }
+}
+
+type ExtensionErrorEvent = {
+  extensionPath: string;
+  event: string;
+  error: string;
+  stack?: string;
+};
+
+type ExtensionErrorHandler = (event: ExtensionErrorEvent) => void;
 
 function initSentry(
   config: ResolvedPluginConfig,
@@ -23,7 +41,7 @@ function initSentry(
         requestedDsn: config.dsn,
       });
     }
-    return undefined;
+    return sharedClient ?? getClient<LightNodeClient>();
   }
 
   const client = initWithoutDefaultIntegrations({
@@ -49,7 +67,63 @@ function initSentry(
 
   sentryInitialized = true;
   initializedDsn = config.dsn;
+  sharedClient = client;
   return client;
+}
+
+function retainClient(client: LightNodeClient | undefined): void {
+  if (!client) {
+    return;
+  }
+  sharedClientRefCount++;
+}
+
+async function releaseClient(client: LightNodeClient | undefined): Promise<void> {
+  if (!client) {
+    return;
+  }
+
+  sharedClientRefCount = Math.max(0, sharedClientRefCount - 1);
+  if (sharedClientRefCount > 0) {
+    return;
+  }
+
+  try {
+    await client.close(5000);
+  } finally {
+    sharedClient = undefined;
+    sentryInitialized = false;
+    initializedDsn = null;
+  }
+}
+
+function registerExtensionErrorCapture(
+  pi: ExtensionAPI,
+  logger: ReturnType<typeof createLogger>,
+): void {
+  const handler: ExtensionErrorHandler = (event) => {
+    const err = new Error(
+      `Extension error in ${event.extensionPath} during ${event.event}: ${event.error}`,
+    );
+    if (event.stack) err.stack = event.stack;
+    Sentry.captureException(err, {
+      tags: {
+        "pi.extension.path": event.extensionPath,
+        "pi.extension.event": event.event,
+      },
+    });
+  };
+
+  try {
+    (pi.on as unknown as (event: string, handler: ExtensionErrorHandler) => void)(
+      "extension_error",
+      handler,
+    );
+  } catch (error) {
+    logger.info("extension_error event not available; skipping sibling extension error capture", {
+      error: error instanceof Error ? error.message : String(error),
+    });
+  }
 }
 
 export default async function piSentryMonitor(pi: ExtensionAPI) {
@@ -129,23 +203,17 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   const projectName = getProjectName(config, cwd);
   const agentName = getAgentName(config);
   const client = initSentry(config, logger);
+  retainClient(client);
   const tracer = new SessionTracer(config, agentName, projectName);
+  const beforeExitCleanup = () => {
+    tracer.cleanupSession();
+  };
+  beforeExitCleanups.add(beforeExitCleanup);
+  if (beforeExitCleanups.size === 1) {
+    process.on("beforeExit", onBeforeExit);
+  }
 
-  // Capture extension errors from other extensions.
-  // When any extension handler throws, pi's ExtensionRunner calls emitError()
-  // which now also emits an "extension_error" event that extensions can listen to.
-  pi.on("extension_error" as any, (event: any) => {
-    const err = new Error(
-      `Extension error in ${event.extensionPath} during ${event.event}: ${event.error}`,
-    );
-    if (event.stack) err.stack = event.stack;
-    Sentry.captureException(err, {
-      tags: {
-        "pi.extension.path": event.extensionPath,
-        "pi.extension.event": event.event,
-      },
-    });
-  });
+  registerExtensionErrorCapture(pi, logger);
 
   // Background CLI insights state
   let sentryAuthenticated = false;
@@ -238,20 +306,18 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   pi.on("session_shutdown", async () => {
     try {
-      tracer.cleanupSession();
-      if (client) {
-        await client.close(5000);
+      beforeExitCleanups.delete(beforeExitCleanup);
+      if (beforeExitCleanups.size === 0) {
+        process.off("beforeExit", onBeforeExit);
       }
+      tracer.cleanupSession();
+      await releaseClient(client);
     } catch (error) {
       Sentry.captureException(error);
       logger.warn("Failed to cleanup session on shutdown", {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-  });
-
-  process.on("beforeExit", () => {
-    tracer.cleanupSession();
   });
 
   pi.on("model_select", (event) => {

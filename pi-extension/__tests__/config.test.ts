@@ -8,8 +8,8 @@ describe("normalizeConfig", () => {
     const result = normalizeConfig({ dsn: VALID_DSN });
     expect(result.dsn).toBe(VALID_DSN);
     expect(result.tracesSampleRate).toBe(1);
-    expect(result.recordInputs).toBe(true);
-    expect(result.recordOutputs).toBe(true);
+    expect(result.recordInputs).toBe(false);
+    expect(result.recordOutputs).toBe(false);
     expect(result.maxAttributeLength).toBe(12000);
     expect(result.includeMessageUsageSpans).toBe(true);
     expect(result.includeSessionEvents).toBe(true);
@@ -71,6 +71,7 @@ describe("addEnvOverrides", () => {
     "PI_SENTRY_DSN",
     "SENTRY_DSN",
     "PI_SENTRY_RECORD_INPUTS",
+    "PI_SENTRY_RECORD_OUTPUTS",
     "PI_SENTRY_TAGS",
     "SENTRY_ENVIRONMENT",
     "PI_SENTRY_TRACES_SAMPLE_RATE",
@@ -109,6 +110,12 @@ describe("addEnvOverrides", () => {
     process.env.PI_SENTRY_RECORD_INPUTS = "false";
     const result = addEnvOverrides({ recordInputs: true });
     expect(result.recordInputs).toBe(false);
+  });
+
+  it("overrides output capture boolean from env", () => {
+    process.env.PI_SENTRY_RECORD_OUTPUTS = "true";
+    const result = addEnvOverrides({ recordOutputs: false });
+    expect(result.recordOutputs).toBe(true);
   });
 
   it("parses boolean env truthy values", () => {

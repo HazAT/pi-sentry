@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 
 /**
- * Apply patches to node_modules after install.
+ * Apply patches to node_modules manually.
  *
- * Patches live in patches/ and target @mariozechner/pi-coding-agent.
- * Remove this script once the changes land upstream.
+ * This script is an opt-in maintainer utility, not part of install-time
+ * behavior. It exists so we can verify or reapply the upstream patch locally
+ * when needed.
  *
  * See: https://github.com/badlogic/pi-mono/issues/XXX
  */

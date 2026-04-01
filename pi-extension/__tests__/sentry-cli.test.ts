@@ -44,6 +44,23 @@ describe("splitCommand", () => {
       "title:'my error'",
     ]);
   });
+
+  it("keeps escaped spaces in a single argument", () => {
+    expect(splitCommand("trace view abc\\ 123")).toEqual(["trace", "view", "abc 123"]);
+  });
+
+  it("keeps escaped quotes inside double quotes", () => {
+    expect(splitCommand('issue list --query "title=\\"my error\\""')).toEqual([
+      "issue",
+      "list",
+      "--query",
+      'title="my error"',
+    ]);
+  });
+
+  it("treats an unterminated quote as part of the final argument", () => {
+    expect(splitCommand('issue list --query "oops')).toEqual(["issue", "list", "--query", "oops"]);
+  });
 });
 
 describe("createSentryCLI", () => {

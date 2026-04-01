@@ -8,8 +8,8 @@ const CONFIG_FILE_NAMES = ["sentry.json", "sentry.jsonc"] as const;
 
 const DEFAULTS = {
   tracesSampleRate: 1,
-  recordInputs: true,
-  recordOutputs: true,
+  recordInputs: false,
+  recordOutputs: false,
   maxAttributeLength: 12000,
   includeMessageUsageSpans: true,
   includeSessionEvents: true,
