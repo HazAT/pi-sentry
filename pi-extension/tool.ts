@@ -2,8 +2,8 @@ import type { Theme } from "@mariozechner/pi-coding-agent";
 import { truncateToVisualLines, keyHint } from "@mariozechner/pi-coding-agent";
 import { Container, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
-import type { SentryCLI } from "./sentry-cli.js";
-import { isAuthError, formatSentryDuration } from "./helpers.js";
+import type { SentryCLI } from "./sentry-cli.ts";
+import { isAuthError, formatSentryDuration } from "./helpers.ts";
 
 type SentryRenderState = {
   startedAt: number | undefined;

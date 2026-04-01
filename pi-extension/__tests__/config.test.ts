@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { normalizeConfig, addEnvOverrides } from "../config.js";
+import { normalizeConfig, addEnvOverrides } from "../config.ts";
 
 const VALID_DSN = "https://key@sentry.io/123";
 

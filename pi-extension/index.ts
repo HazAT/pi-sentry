@@ -1,13 +1,13 @@
 import type { ExtensionAPI, ExtensionUIContext } from "@mariozechner/pi-coding-agent";
 import { Box, Text } from "@mariozechner/pi-tui";
-import { createSentryCLI } from "./sentry-cli.js";
+import { createSentryCLI } from "./sentry-cli.ts";
 import * as Sentry from "@sentry/node-core/light";
 import { initWithoutDefaultIntegrations, type LightNodeClient } from "@sentry/node-core/light";
 import { conversationIdIntegration, getClient } from "@sentry/core";
-import { loadPluginConfig, type ResolvedPluginConfig } from "./config.js";
-import { createLogger, getProjectName, getAgentName } from "./helpers.js";
-import { createSentryTool } from "./tool.js";
-import { SessionTracer } from "./tracing.js";
+import { loadPluginConfig, type ResolvedPluginConfig } from "./config.ts";
+import { createLogger, getProjectName, getAgentName } from "./helpers.ts";
+import { createSentryTool } from "./tool.ts";
+import { SessionTracer } from "./tracing.ts";
 
 let sentryInitialized = false;
 let initializedDsn: string | null = null;

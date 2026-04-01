@@ -1,7 +1,7 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { fauxAssistantMessage } from "@mariozechner/pi-ai";
-import { withTestSession } from "./helpers/setup.js";
+import { withTestSession } from "./helpers/setup.ts";
 
 describe("error capture", () => {
   it("still captures traces when a sibling extension throws during load", async () => {

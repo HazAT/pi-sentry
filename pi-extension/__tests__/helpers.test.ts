@@ -8,8 +8,8 @@ import {
   getAgentName,
   formatSentryDuration,
   setSpanStatus,
-} from "../helpers.js";
-import type { ResolvedPluginConfig } from "../config.js";
+} from "../helpers.ts";
+import type { ResolvedPluginConfig } from "../config.ts";
 
 function mockSpan() {
   const attrs: Record<string, string | number | boolean> = {};

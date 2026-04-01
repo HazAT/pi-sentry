@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitCommand, createSentryCLI } from "../sentry-cli.js";
+import { splitCommand, createSentryCLI } from "../sentry-cli.ts";
 
 describe("splitCommand", () => {
   it("splits basic args", () => {

@@ -9,6 +9,7 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
     "types": ["node"],
     "paths": {
       "vitest": ["./node_modules/@voidzero-dev/vite-plus-test/dist/index.d.ts"]

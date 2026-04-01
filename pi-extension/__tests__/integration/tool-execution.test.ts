@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { fauxAssistantMessage, fauxToolCall } from "@mariozechner/pi-ai";
 import { Type } from "@sinclair/typebox";
-import { withTestSession } from "./helpers/setup.js";
+import { withTestSession } from "./helpers/setup.ts";
 
 describe("tool execution trace", () => {
   it("captures execute_tool spans for tool calls", async () => {

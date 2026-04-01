@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withTestSession } from "./helpers/setup.js";
+import { withTestSession } from "./helpers/setup.ts";
 
 describe("no DSN configured", () => {
   it("sends no envelopes but sentry tool is still available", async () => {

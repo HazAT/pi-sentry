@@ -1,6 +1,6 @@
 import { resolve } from "node:path";
 import { describe, expect, it } from "vitest";
-import { withTestSession } from "./helpers/setup.js";
+import { withTestSession } from "./helpers/setup.ts";
 
 describe("extension_error event", () => {
   it("captures errors from broken extension handlers via extension_error event", async () => {

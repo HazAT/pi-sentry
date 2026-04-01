@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { serializeAttribute } from "../serialize.js";
+import { serializeAttribute } from "../serialize.ts";
 
 describe("serializeAttribute", () => {
   it("passes through plain strings", () => {

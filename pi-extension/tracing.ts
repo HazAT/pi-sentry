@@ -1,8 +1,8 @@
 import * as Sentry from "@sentry/node-core/light";
 import { setConversationId } from "@sentry/core";
-import type { ResolvedPluginConfig } from "./config.js";
-import { serializeAttribute } from "./serialize.js";
-import { setSpanStatus, attachTokenUsage, isAssistantMessage } from "./helpers.js";
+import type { ResolvedPluginConfig } from "./config.ts";
+import { serializeAttribute } from "./serialize.ts";
+import { setSpanStatus, attachTokenUsage, isAssistantMessage } from "./helpers.ts";
 
 type SentrySpan = ReturnType<typeof Sentry.startInactiveSpan>;
 

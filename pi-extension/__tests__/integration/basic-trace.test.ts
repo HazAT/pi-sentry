@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { withTestSession } from "./helpers/setup.js";
+import { withTestSession } from "./helpers/setup.ts";
 
 describe("basic session trace", () => {
   it("captures an invoke_agent transaction with session attributes", async () => {

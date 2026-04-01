@@ -15,7 +15,7 @@ import {
   type AgentSession,
   type ExtensionFactory,
 } from "@mariozechner/pi-coding-agent";
-import { createEnvelopeServer, type EnvelopeServer } from "./envelope-server.js";
+import { createEnvelopeServer, type EnvelopeServer } from "./envelope-server.ts";
 
 const EXTENSION_PATH = resolve(import.meta.dirname, "../../../index.ts");
 

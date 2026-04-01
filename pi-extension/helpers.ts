@@ -1,5 +1,5 @@
 import type { AssistantMessage } from "@mariozechner/pi-ai";
-import type { PluginLogger, ResolvedPluginConfig } from "./config.js";
+import type { PluginLogger, ResolvedPluginConfig } from "./config.ts";
 import { basename, dirname } from "node:path";
 
 /** Sentry span type — avoids importing Sentry in pure helper code */
