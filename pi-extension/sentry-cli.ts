@@ -1,5 +1,9 @@
 export interface ExecFn {
-  (command: string, args: string[], options?: { timeout?: number; cwd?: string }): Promise<{
+  (
+    command: string,
+    args: string[],
+    options?: { timeout?: number; cwd?: string },
+  ): Promise<{
     stdout: string;
     stderr: string;
     code: number;

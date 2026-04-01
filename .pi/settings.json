@@ -1,3 +1,4 @@
 {
-  "extensions": ["../pi-extension/index.ts"]
+  "extensions": ["../pi-extension/index.ts"],
+  "skills": ["../skills"]
 }

@@ -107,11 +107,22 @@ function setSpanStatus(span: SentrySpan, isError: boolean): void {
 
 function isAuthError(output: string): boolean {
   const lower = output.toLowerCase();
-  return ["not logged in", "not authenticated", "401", "auth token", "unauthorized", "login required", "run 'sentry auth login'", "run `sentry auth login`"]
-    .some(indicator => lower.includes(indicator));
+  return [
+    "not logged in",
+    "not authenticated",
+    "401",
+    "auth token",
+    "unauthorized",
+    "login required",
+    "run 'sentry auth login'",
+    "run `sentry auth login`",
+  ].some((indicator) => lower.includes(indicator));
 }
 
-function initSentry(config: ResolvedPluginConfig, logger: PluginLogger): LightNodeClient | undefined {
+function initSentry(
+  config: ResolvedPluginConfig,
+  logger: PluginLogger,
+): LightNodeClient | undefined {
   if (sentryInitialized) {
     if (initializedDsn && initializedDsn !== config.dsn) {
       logger.warn("Sentry already initialized with different DSN", {
@@ -189,7 +200,12 @@ function isAssistantMessage(msg: unknown): msg is AssistantMessage {
     return false;
   }
   const m = msg as Record<string, unknown>;
-  return m.role === "assistant" && typeof m.model === "string" && m.usage !== null && typeof m.usage === "object";
+  return (
+    m.role === "assistant" &&
+    typeof m.model === "string" &&
+    m.usage !== null &&
+    typeof m.usage === "object"
+  );
 }
 
 type SentryRenderState = {
@@ -212,21 +228,25 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   // Register init block renderer for conversation display
   pi.registerMessageRenderer("sentry-init", (message, { expanded }, theme) => {
-    const d = message.details as {
-      monitoring: boolean;
-      project?: string;
-      agent?: string;
-      environment?: string;
-      source?: string;
-      tracing?: boolean;
-      inputs?: boolean;
-      outputs?: boolean;
-    } | undefined;
+    const d = message.details as
+      | {
+          monitoring: boolean;
+          project?: string;
+          agent?: string;
+          environment?: string;
+          source?: string;
+          tracing?: boolean;
+          inputs?: boolean;
+          outputs?: boolean;
+        }
+      | undefined;
 
     const lines: string[] = [];
 
     if (!d?.monitoring) {
-      lines.push(theme.fg("warning", "▲ Sentry") + theme.fg("muted", " · tool only (no DSN configured)"));
+      lines.push(
+        theme.fg("warning", "▲ Sentry") + theme.fg("muted", " · tool only (no DSN configured)"),
+      );
     } else {
       lines.push(theme.fg("success", "▲ Sentry") + theme.fg("muted", " · monitoring active"));
       if (expanded) {
@@ -251,14 +271,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
   // Register sentry CLI tool — always available regardless of DSN config
   const cli = createSentryCLI((cmd, args, opts) =>
-    pi.exec(cmd, args, { timeout: opts?.timeout, cwd: opts?.cwd ?? cwd })
+    pi.exec(cmd, args, { timeout: opts?.timeout, cwd: opts?.cwd ?? cwd }),
   );
 
   pi.registerTool({
     name: "sentry",
     label: "Sentry CLI",
-    description: "Run Sentry CLI commands. Pass the command string exactly as you would after 'sentry' on the command line.",
-    promptSnippet: "sentry - Run Sentry CLI commands (issue list, trace view, log list, auth status, etc.)",
+    description:
+      "Run Sentry CLI commands. Pass the command string exactly as you would after 'sentry' on the command line.",
+    promptSnippet:
+      "sentry - Run Sentry CLI commands (issue list, trace view, log list, auth status, etc.)",
     promptGuidelines: [
       "Before using the sentry tool, load the `sentry-cli` skill once for full usage guidance, workflows, and examples.",
       "The sentry tool runs Sentry CLI commands. Pass the full command after 'sentry', e.g. sentry({ command: \"issue list --limit 5 --json\" })",
@@ -268,7 +290,8 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     ],
     parameters: Type.Object({
       command: Type.String({
-        description: "Sentry CLI command (everything after 'sentry'). Examples: 'issue list --limit 5', 'trace view <id> --json', 'auth status'"
+        description:
+          "Sentry CLI command (everything after 'sentry'). Examples: 'issue list --limit 5', 'trace view <id> --json', 'auth status'",
       }),
     }),
     renderCall(args: { command: string }, theme: Theme, context) {
@@ -303,7 +326,10 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         .join("\n")
         .trim();
       if (textContent) {
-        const styledOutput = textContent.split("\n").map((line: string) => theme.fg("toolOutput", line)).join("\n");
+        const styledOutput = textContent
+          .split("\n")
+          .map((line: string) => theme.fg("toolOutput", line))
+          .join("\n");
         if (context.expanded) {
           component.addChild(new Text(`\n${styledOutput}`, 0, 0));
         } else {
@@ -311,7 +337,8 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
             render: (width: number) => {
               const preview = truncateToVisualLines(styledOutput, SENTRY_PREVIEW_LINES, width);
               if (preview.skippedCount > 0) {
-                const hint = theme.fg("muted", `... (${preview.skippedCount} earlier lines,`) +
+                const hint =
+                  theme.fg("muted", `... (${preview.skippedCount} earlier lines,`) +
                   ` ${keyHint("app.tools.expand", "to expand")})`;
                 return ["", truncateToWidth(hint, width, "..."), ...preview.visualLines];
               }
@@ -324,7 +351,13 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       if (state.startedAt !== undefined) {
         const label = options.isPartial ? "Elapsed" : "Took";
         const endTime = state.endedAt ?? Date.now();
-        component.addChild(new Text(`\n${theme.fg("muted", `${label} ${formatSentryDuration(endTime - state.startedAt)}`)}`, 0, 0));
+        component.addChild(
+          new Text(
+            `\n${theme.fg("muted", `${label} ${formatSentryDuration(endTime - state.startedAt)}`)}`,
+            0,
+            0,
+          ),
+        );
       }
       component.invalidate();
       return component;
@@ -337,7 +370,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       // Check if auth is needed
       if (result.code !== 0 && isAuthError(output)) {
         if (signal?.aborted) {
-          return { content: [{ type: "text", text: output || "(no output)" }], isError: true, details: undefined };
+          return {
+            content: [{ type: "text", text: output || "(no output)" }],
+            isError: true,
+            details: undefined,
+          };
         }
 
         const parts: string[] = [];
@@ -410,13 +447,14 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   async function runBackgroundQuery() {
     uiContext?.setStatus("sentry", "▲ Sentry (checking issues...)");
     try {
-      const result = await cli.run("issue list --limit 3 --json --fields shortId,title,level", { timeout: 15_000 });
+      const result = await cli.run("issue list --limit 3 --json --fields shortId,title,level", {
+        timeout: 15_000,
+      });
       uiContext?.setStatus("sentry", "▲ Sentry (authenticated)");
       if (result.code === 0 && result.stdout.trim()) {
-        pi.sendUserMessage(
-          `[Sentry context] Recent issues:\n${result.stdout}`,
-          { deliverAs: "steer" },
-        );
+        pi.sendUserMessage(`[Sentry context] Recent issues:\n${result.stdout}`, {
+          deliverAs: "steer",
+        });
       }
     } catch {
       uiContext?.setStatus("sentry", "▲ Sentry (authenticated)");
@@ -443,11 +481,11 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   let statusFlashTimer: ReturnType<typeof setTimeout> | undefined;
 
   // Conversation tracking — links turns within the same session
-  let sessionId: string | undefined;     // from pi's session manager, used as conversation ID
+  let sessionId: string | undefined; // from pi's session manager, used as conversation ID
   let sessionFilePath: string | undefined; // full path to the .jsonl session file
-  let turnIndex = 0;                     // incremented on turn_start
-  let previousTraceId: string | undefined; // trace ID of the previous turn for linking
-  let turnHadToolCalls = false;            // tracks if current turn had tool executions
+  let turnIndex = 0; // incremented on turn_start
+  let _previousTraceId: string | undefined; // trace ID of the previous turn for linking
+  let turnHadToolCalls = false; // tracks if current turn had tool executions
 
   function flashStatus(count: number): void {
     if (!uiContext || count === 0) return;
@@ -490,12 +528,14 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
           "pi.turn.index": turnIndex,
           ...(sessionId ? { "pi.session.id": sessionId } : {}),
           ...(sessionFilePath ? { "pi.session.file": sessionFilePath } : {}),
-          ...(lastUserPrompt && config.recordInputs ? {
-            "gen_ai.request.messages": serializeAttribute(
-              JSON.stringify([{ role: "user", content: lastUserPrompt }]),
-              config.maxAttributeLength,
-            ),
-          } : {}),
+          ...(lastUserPrompt && config.recordInputs
+            ? {
+                "gen_ai.request.messages": serializeAttribute(
+                  JSON.stringify([{ role: "user", content: lastUserPrompt }]),
+                  config.maxAttributeLength,
+                ),
+              }
+            : {}),
           ...config.tags,
         },
       });
@@ -604,13 +644,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       }, 5000);
 
       if (config.enableCLIInsights) {
-        cli.run("auth status", { timeout: 10_000 }).then((result) => {
-          sentryAuthenticated = result.code === 0;
-          const authStatus = sentryAuthenticated ? "authenticated" : "not authenticated";
-          uiContext?.setStatus("sentry", `▲ Sentry (${authStatus})`);
-        }).catch(() => {
-          // CLI not available — silently skip
-        });
+        cli
+          .run("auth status", { timeout: 10_000 })
+          .then((result) => {
+            sentryAuthenticated = result.code === 0;
+            const authStatus = sentryAuthenticated ? "authenticated" : "not authenticated";
+            uiContext?.setStatus("sentry", `▲ Sentry (${authStatus})`);
+          })
+          .catch(() => {
+            // CLI not available — silently skip
+          });
       }
     } catch (error) {
       Sentry.captureException(error);
@@ -625,7 +668,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     sessionId = ctx.sessionManager.getSessionId();
     sessionFilePath = ctx.sessionManager.getSessionFile();
     turnIndex = 0;
-    previousTraceId = undefined;
+    _previousTraceId = undefined;
     setConversationId(sessionId);
   });
 
@@ -760,7 +803,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
     // End the previous interaction's span if still open
     if (sessionSpan) {
-      previousTraceId = sessionSpan.spanContext().traceId;
+      _previousTraceId = sessionSpan.spanContext().traceId;
       cleanupSession();
     }
     lastAssistantResponse = undefined;
@@ -787,7 +830,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       }
 
       const parentSpan = ensureSessionSpan();
-      const spanModel = (typeof msg.model === "string" && msg.model.length > 0) ? msg.model : modelId;
+      const spanModel = typeof msg.model === "string" && msg.model.length > 0 ? msg.model : modelId;
 
       const requestSpan = Sentry.startInactiveSpan({
         parentSpan,
@@ -892,8 +935,16 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
       if (msg.content) {
         // Extract tool calls from the response
         const toolCalls = msg.content
-          .filter((c): c is { type: "toolCall"; id: string; name: string; arguments: Record<string, any> } =>
-            (c as any).type === "toolCall")
+          .filter(
+            (
+              c,
+            ): c is {
+              type: "toolCall";
+              id: string;
+              name: string;
+              arguments: Record<string, any>;
+            } => (c as any).type === "toolCall",
+          )
           .map((c) => ({ name: c.name, type: "function", arguments: JSON.stringify(c.arguments) }));
         if (toolCalls.length > 0) {
           usageSpan.setAttribute(
@@ -905,7 +956,10 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
         // Record text output
         if (config.recordOutputs) {
           const textContent = msg.content
-            .filter((c): c is { type: "text"; text: string } => (c as any).type === "text" && typeof (c as any).text === "string")
+            .filter(
+              (c): c is { type: "text"; text: string } =>
+                (c as any).type === "text" && typeof (c as any).text === "string",
+            )
             .map((c) => c.text)
             .join("\n");
           if (textContent.length > 0) {
@@ -983,7 +1037,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     try {
       // Final text response turn — end the span and flush
       if (sessionSpan) {
-        previousTraceId = sessionSpan.spanContext().traceId;
+        _previousTraceId = sessionSpan.spanContext().traceId;
       }
 
       cleanupSession();

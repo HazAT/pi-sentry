@@ -19,10 +19,18 @@ scripts/               ← Utility scripts
 ## Verify
 
 ```bash
-npm run typecheck   # always run after changes
+npm run check       # typecheck + lint + format check — always run after changes
 ```
 
-Must pass before committing. No build step — pi loads TypeScript directly.
+Individual checks:
+```bash
+npm run typecheck   # TypeScript type checking
+npm run lint        # oxlint — fast linter
+npm run format      # oxfmt — auto-format in place
+npm run format:check # oxfmt — check without writing
+```
+
+All checks must pass before committing. No build step — pi loads TypeScript directly.
 
 ## Key Conventions
 
