@@ -3,6 +3,7 @@ import { Box, Text } from "@mariozechner/pi-tui";
 import { createSentryCLI } from "./sentry-cli.js";
 import * as Sentry from "@sentry/node-core/light";
 import { initWithoutDefaultIntegrations, type LightNodeClient } from "@sentry/node-core/light";
+import { conversationIdIntegration } from "@sentry/core";
 import { loadPluginConfig, type ResolvedPluginConfig } from "./config.js";
 import { createLogger, getProjectName, getAgentName } from "./helpers.js";
 import { createSentryTool } from "./tool.js";
@@ -42,6 +43,7 @@ function initSentry(
       Sentry.onUnhandledRejectionIntegration({
         mode: "warn",
       }),
+      conversationIdIntegration(),
     ],
   });
 
@@ -124,6 +126,22 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   const agentName = getAgentName(config);
   const client = initSentry(config, logger);
   const tracer = new SessionTracer(config, agentName, projectName);
+
+  // Capture extension errors from other extensions.
+  // When any extension handler throws, pi's ExtensionRunner calls emitError()
+  // which now also emits an "extension_error" event that extensions can listen to.
+  pi.on("extension_error" as any, (event: any) => {
+    const err = new Error(
+      `Extension error in ${event.extensionPath} during ${event.event}: ${event.error}`,
+    );
+    if (event.stack) err.stack = event.stack;
+    Sentry.captureException(err, {
+      tags: {
+        "pi.extension.path": event.extensionPath,
+        "pi.extension.event": event.event,
+      },
+    });
+  });
 
   // Background CLI insights state
   let sentryAuthenticated = false;
