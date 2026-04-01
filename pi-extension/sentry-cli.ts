@@ -51,8 +51,16 @@ function formatResult(result: unknown): string {
 }
 
 /**
- * Lazy-load the sentry SDK to avoid its ESM loader hooks from interfering
- * with other extensions' module resolution at import time.
+ * Why dynamic import? The `sentry` package bundles @sentry/node-core which
+ * registers ESM loader hooks (import-in-the-middle) and diagnostics_channel
+ * subscriptions the moment it's imported. A top-level `import ... from "sentry"`
+ * would run during pi's extension loading phase — before other extensions have
+ * been loaded — and corrupt their module resolution ("Cannot find package" errors
+ * for @mariozechner/pi-ai, @sinclair/typebox, etc.).
+ *
+ * By deferring to a dynamic import() we push SDK initialization to first actual
+ * use (when the sentry tool is invoked or a background query fires), safely after
+ * all extensions are loaded. The result is cached so subsequent calls are free.
  */
 async function loadSDK() {
   const { createSentrySDK, SentryError } = await import("sentry");
