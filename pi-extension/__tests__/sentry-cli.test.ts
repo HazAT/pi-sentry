@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { splitCommand } from "../sentry-cli.js";
+import { splitCommand, createSentryCLI } from "../sentry-cli.js";
 
 describe("splitCommand", () => {
   it("splits basic args", () => {
@@ -43,5 +43,15 @@ describe("splitCommand", () => {
       "--query",
       "title:'my error'",
     ]);
+  });
+});
+
+describe("createSentryCLI", () => {
+  it("returns object with expected methods", () => {
+    const cli = createSentryCLI();
+    expect(typeof cli.run).toBe("function");
+    expect(typeof cli.authStatus).toBe("function");
+    expect(typeof cli.authLogin).toBe("function");
+    expect(typeof cli.issueList).toBe("function");
   });
 });

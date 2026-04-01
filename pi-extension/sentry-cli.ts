@@ -1,15 +1,4 @@
-export interface ExecFn {
-  (
-    command: string,
-    args: string[],
-    options?: { timeout?: number; cwd?: string },
-  ): Promise<{
-    stdout: string;
-    stderr: string;
-    code: number;
-    killed: boolean;
-  }>;
-}
+import { createSentrySDK, SentryError } from "sentry";
 
 export interface CLIResult {
   stdout: string;
@@ -18,7 +7,10 @@ export interface CLIResult {
 }
 
 export interface SentryCLI {
-  run(command: string, options?: { timeout?: number; cwd?: string }): Promise<CLIResult>;
+  run(command: string, options?: { timeout?: number }): Promise<CLIResult>;
+  authStatus(): Promise<CLIResult>;
+  authLogin(): Promise<CLIResult>;
+  issueList(options?: { limit?: number; query?: string }): Promise<unknown>;
 }
 
 /**
@@ -55,12 +47,56 @@ export function splitCommand(command: string): string[] {
   return args;
 }
 
-export function createSentryCLI(exec: ExecFn): SentryCLI {
+function formatResult(result: unknown): string {
+  if (typeof result === "string") return result;
+  return JSON.stringify(result, null, 2);
+}
+
+function formatError(error: unknown, fallbackPrefix: string): CLIResult {
+  if (error instanceof SentryError) {
+    return {
+      stdout: "",
+      stderr: [error.message, error.stderr].filter(Boolean).join("\n"),
+      code: error.exitCode ?? 1,
+    };
+  }
+  return { stdout: "", stderr: `${fallbackPrefix}: ${String(error)}`, code: 1 };
+}
+
+export function createSentryCLI(): SentryCLI {
+  const sdk = createSentrySDK();
+
   return {
-    async run(command, options) {
-      const args = ["sentry@latest", ...splitCommand(command)];
-      const result = await exec("npx", args, options);
-      return { stdout: result.stdout, stderr: result.stderr, code: result.code };
+    async run(command, _options) {
+      try {
+        const args = splitCommand(command);
+        const result = await sdk.run(...args);
+        return { stdout: formatResult(result), stderr: "", code: 0 };
+      } catch (error) {
+        return formatError(error, "Sentry CLI error");
+      }
+    },
+
+    async authStatus() {
+      try {
+        const result = await sdk.auth.status();
+        return { stdout: formatResult(result), stderr: "", code: 0 };
+      } catch (error) {
+        return formatError(error, "Auth status error");
+      }
+    },
+
+    async authLogin() {
+      try {
+        await sdk.auth.login();
+        return { stdout: "Successfully authenticated", stderr: "", code: 0 };
+      } catch (error) {
+        return formatError(error, "Auth login error");
+      }
+    },
+
+    async issueList(options) {
+      return await sdk.issue.list(options);
     },
   };
 }

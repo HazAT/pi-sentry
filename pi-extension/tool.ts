@@ -127,7 +127,7 @@ export function createSentryTool(cli: SentryCLI) {
         parts.push("🌐 Opening your browser to log in...");
         parts.push("   Please approve the request in your browser.\n");
 
-        const authResult = await cli.run("auth login", { timeout: 120_000 });
+        const authResult = await cli.authLogin();
 
         if (authResult.code !== 0) {
           const authOutput = [authResult.stdout, authResult.stderr].filter(Boolean).join("\n");

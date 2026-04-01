@@ -106,9 +106,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   });
 
   // Register sentry CLI tool — always available regardless of DSN config
-  const cli = createSentryCLI((cmd, args, opts) =>
-    pi.exec(cmd, args, { timeout: opts?.timeout, cwd: opts?.cwd ?? cwd }),
-  );
+  const cli = createSentryCLI();
   pi.registerTool(createSentryTool(cli));
 
   // Load config — if no DSN, register tool-only mode and return
@@ -171,12 +169,10 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
   async function runBackgroundQuery() {
     uiContext?.setStatus("sentry", "▲ Sentry (checking issues...)");
     try {
-      const result = await cli.run("issue list --limit 3 --json --fields shortId,title,level", {
-        timeout: 15_000,
-      });
+      const issues = await cli.issueList({ limit: 3 });
       uiContext?.setStatus("sentry", "▲ Sentry (authenticated)");
-      if (result.code === 0 && result.stdout.trim()) {
-        pi.sendUserMessage(`[Sentry context] Recent issues:\n${result.stdout}`, {
+      if (Array.isArray(issues) && issues.length > 0) {
+        pi.sendUserMessage(`[Sentry context] Recent issues:\n${JSON.stringify(issues, null, 2)}`, {
           deliverAs: "steer",
         });
       }
@@ -219,7 +215,7 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
 
       if (config.enableCLIInsights) {
         cli
-          .run("auth status", { timeout: 10_000 })
+          .authStatus()
           .then((result) => {
             sentryAuthenticated = result.code === 0;
             const authStatus = sentryAuthenticated ? "authenticated" : "not authenticated";
