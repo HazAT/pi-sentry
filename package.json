@@ -1,7 +1,7 @@
 {
   "name": "pi-sentry",
   "version": "0.1.11",
-  "description": "Sentry AI Monitoring extension for pi coding agent sessions and tool calls",
+  "description": "Sentry observability extension for pi — distributed tracing, error capture, and built-in Sentry CLI tool",
   "keywords": [
     "ai-monitoring",
     "extension",

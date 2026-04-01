@@ -1,39 +1,40 @@
-# Sentry Extension
+# Sentry Extension for pi
 
-Sentry AI Monitoring extension for [pi coding agent](https://github.com/badlogic/pi-mono/tree/main/packages/coding-agent) sessions and tool calls.
+Full [Sentry](https://sentry.io) observability for [pi](https://github.com/badlogic/pi-mono) coding agent sessions — distributed tracing, error capture, and a built-in Sentry CLI tool.
 
-Tracks agent sessions, tool executions, token usage, and errors as Sentry traces.
+## What It Does
 
-## Trace Hierarchy
+**Monitoring** — Every agent session becomes a Sentry trace. Tool calls, LLM requests, token usage, and errors are captured as spans with full [AI Agent Monitoring](https://docs.sentry.io/product/ai-monitoring/) attributes.
+
+**Sentry CLI tool** — Agents can query Sentry directly: list issues, view traces, inspect spans, read logs, get AI-powered explanations — all without leaving the conversation.
+
+### Trace Structure
 
 ```
-gen_ai.invoke_agent (session span)
-├── gen_ai.execute_tool (per tool call)
-│   ├── gen_ai.tool.input  (if recordInputs enabled)
-│   └── gen_ai.tool.output (if recordOutputs enabled)
-└── gen_ai.request (per assistant message)
-    └── token usage attributes (input, output, cached)
+gen_ai.invoke_agent (per user interaction)
+├── gen_ai.execute_tool (per tool call — bash, read, edit, etc.)
+└── gen_ai.request (per LLM request — model, tokens, latency)
 ```
 
-## Installation
+Each user message starts a new trace. Tool inputs/outputs and LLM responses are captured as span attributes.
 
-**Global** (applies to all projects):
+## Install
+
+**Global** (all projects):
 ```bash
 pi install npm:pi-sentry
 ```
 
-**Project-local** (checked into the repo, shared with teammates):
+**Project-local** (shared with teammates):
 ```bash
 pi install npm:pi-sentry -l
 ```
 
-Then run `/reload` in pi to activate without restarting.
+Run `/reload` in pi to activate without restarting.
 
-A companion skill is included — once installed, ask pi to "set up Sentry monitoring" and it will walk through creating a Sentry project, configuring the DSN, and verifying traces are flowing.
+## Configure Monitoring
 
-## Configuration
-
-Create `.pi/sentry.json` (or `.jsonc`) in your project:
+Create `.pi/sentry.json` (or `.jsonc`):
 
 ```json
 {
@@ -41,10 +42,12 @@ Create `.pi/sentry.json` (or `.jsonc`) in your project:
 }
 ```
 
-### Config File Locations (searched in order)
+That's it. Traces flow immediately. The Sentry CLI tool works even without a DSN — monitoring is optional.
 
-1. Path in `PI_SENTRY_CONFIG` env var
-2. `<cwd>/.pi/sentry.json[c]`
+### Config File Locations (first match wins)
+
+1. `$PI_SENTRY_CONFIG` env var (explicit path)
+2. `<project>/.pi/sentry.json[c]`
 3. `~/.pi/agent/sentry.json[c]`
 
 ### Environment Variable Overrides
@@ -52,15 +55,15 @@ Create `.pi/sentry.json` (or `.jsonc`) in your project:
 | Variable | Description |
 |---|---|
 | `PI_SENTRY_DSN` / `SENTRY_DSN` | Sentry DSN |
-| `PI_SENTRY_TRACES_SAMPLE_RATE` | Sample rate (0-1) |
-| `PI_SENTRY_RECORD_INPUTS` | Record tool inputs (true/false) |
-| `PI_SENTRY_RECORD_OUTPUTS` | Record tool outputs (true/false) |
-| `PI_SENTRY_ENABLE_METRICS` | Enable metrics (true/false) |
-| `PI_SENTRY_TAGS` | Custom tags (format: `key:value,key:value`) |
+| `PI_SENTRY_TRACES_SAMPLE_RATE` | Sample rate (0–1) |
+| `PI_SENTRY_RECORD_INPUTS` | Capture tool inputs (true/false) |
+| `PI_SENTRY_RECORD_OUTPUTS` | Capture tool outputs (true/false) |
+| `PI_SENTRY_ENABLE_METRICS` | Emit token usage metrics (true/false) |
+| `PI_SENTRY_TAGS` | Custom tags (`key:value,key:value`) |
 | `SENTRY_ENVIRONMENT` | Environment name |
 | `SENTRY_RELEASE` | Release version |
 
-### Full Config Schema
+### Full Config Reference
 
 ```json
 {
@@ -77,24 +80,43 @@ Create `.pi/sentry.json` (or `.jsonc`) in your project:
   "includeMessageUsageSpans": true,
   "includeSessionEvents": true,
   "enableMetrics": false,
+  "enableCLIInsights": false,
   "tags": {
     "team": "platform"
   }
 }
 ```
 
+## Sentry CLI Tool
+
+Once installed, agents have a `sentry` tool for querying Sentry data. Auth is handled automatically — if the agent isn't authenticated, the tool opens a browser login flow and retries.
+
+```
+sentry issue list --limit 5
+sentry issue view PROJ-123
+sentry issue explain PROJ-123
+sentry trace list --since 1h
+sentry trace view <trace-id>
+sentry span list <trace-id>
+sentry log list
+```
+
+A bundled skill (`sentry-cli`) teaches agents the full command set. It's auto-discovered on install.
+
 ## Event Mapping
 
-| pi event | Sentry span/action |
+| pi event | Sentry span / action |
 |---|---|
-| `session_start` | Create root `gen_ai.invoke_agent` span |
-| `session_shutdown` | End session span, flush Sentry |
-| `model_select` | Track model/provider changes |
+| `input` | End current trace, start a new one for the new interaction |
+| `turn_start` | Track turn index |
+| `model_select` | Update model/provider on active spans |
 | `tool_execution_start` | Start `gen_ai.execute_tool` child span |
-| `tool_execution_end` | End tool span, capture errors |
-| `message_start` (assistant) | Open `gen_ai.request` span (captures real LLM latency) |
-| `message_end` (assistant) | Close `gen_ai.request` span, attach token usage + content |
-| `agent_end` | Flush pending data to Sentry |
+| `tool_execution_end` | End tool span with result/error status |
+| `message_start` (assistant) | Start `gen_ai.request` span (measures LLM latency) |
+| `message_end` (assistant) | End request span, attach token usage and content |
+| `turn_end` | Flush completed trace to Sentry |
+| `session_shutdown` | Close all open spans, flush, shut down client |
+| `extension_error` | Capture exception from any extension handler crash |
 
 ## Development
 
@@ -102,8 +124,12 @@ Create `.pi/sentry.json` (or `.jsonc`) in your project:
 git clone https://github.com/HazAT/pi-sentry && cd pi-sentry
 npm install
 
-# Test without installing (ephemeral)
+# Run without installing
 pi -e ./pi-extension/index.ts
+
+# Checks (all must pass before commit)
+vp check       # format + lint + typecheck
+vp test        # run tests
 ```
 
 ## License
