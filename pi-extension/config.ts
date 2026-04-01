@@ -161,7 +161,7 @@ function parseConfigContent(raw: string, source: string): Record<string, unknown
   }
 }
 
-function normalizeConfig(raw: Record<string, unknown>): ResolvedPluginConfig {
+export function normalizeConfig(raw: Record<string, unknown>): ResolvedPluginConfig {
   const dsn = asString(raw.dsn, "dsn");
 
   let dsnUrl: URL;
@@ -259,7 +259,7 @@ async function getCandidatePaths(cwd: string): Promise<string[]> {
   return candidates;
 }
 
-function addEnvOverrides(raw: Record<string, unknown>): Record<string, unknown> {
+export function addEnvOverrides(raw: Record<string, unknown>): Record<string, unknown> {
   const withEnv = { ...raw };
 
   const dsn = process.env.PI_SENTRY_DSN ?? process.env.SENTRY_DSN;

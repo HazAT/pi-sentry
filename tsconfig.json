@@ -9,11 +9,10 @@
     "esModuleInterop": true,
     "resolveJsonModule": true,
     "skipLibCheck": true,
-    "types": [
-      "node"
-    ]
+    "types": ["node"],
+    "paths": {
+      "vitest": ["./node_modules/@voidzero-dev/vite-plus-test/dist/index.d.ts"]
+    }
   },
-  "include": [
-    "pi-extension/**/*.ts"
-  ]
+  "include": ["pi-extension/**/*.ts", "vite.config.ts"]
 }

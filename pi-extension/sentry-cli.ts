@@ -25,7 +25,7 @@ export interface SentryCLI {
  * Split a command string into args, respecting single and double quotes.
  * e.g. `issue list --query "is:unresolved assigned:me"` → ["issue", "list", "--query", "is:unresolved assigned:me"]
  */
-function splitCommand(command: string): string[] {
+export function splitCommand(command: string): string[] {
   const args: string[] = [];
   let current = "";
   let quote: string | null = null;
