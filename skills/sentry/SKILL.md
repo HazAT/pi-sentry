@@ -10,6 +10,9 @@ Use the `sentry` tool to run the Sentry CLI. The `command` value is exactly what
 ```typescript
 sentry({ command: "issue list --limit 5" });
 sentry({ command: "trace view abc123def456 --json" });
+
+// Save large JSON output to a file instead of context
+sentry({ command: "trace view abc123def456 --json", outputFile: "/tmp/trace.json" });
 ```
 
 ## Agent Guidance
@@ -40,8 +43,37 @@ For raw HTTP access, `api` behaves like a small `curl` wrapper:
 - `--data` sends a request body.
 - `--header` adds headers.
 
+### Handling JSON output
+
+Sentry JSON payloads can be **massive** — a single trace or issue view can return hundreds of KB. Never dump raw `--json` output into the context window. Instead:
+
+1. **Use `outputFile` to save JSON to a file**, then use `jq` to extract what you need:
+
+```typescript
+// ✅ Correct: save to file, query with jq
+sentry({ command: "trace view abc123def456 --json", outputFile: "/tmp/trace.json" });
+// Then in bash:
+// jq '.spans[] | {op: .op, description: .description, duration: .duration}' /tmp/trace.json
+
+// ✅ Correct: save issues to file, extract with jq
+sentry({ command: "issue list --json --limit 10", outputFile: "/tmp/issues.json" });
+// Then in bash:
+// jq '.[].shortId' /tmp/issues.json
+```
+
+```typescript
+// ❌ Wrong: dumping full JSON into context
+sentry({ command: "trace view abc123def456 --json" });
+// This can flood your context with 100KB+ of data
+```
+
+2. **Use `--fields`** to limit output columns when available — but even with `--fields`, save to a file for large result sets.
+3. **Use `--limit` aggressively** to cap results.
+4. **Use `jq` selectively** — extract only the fields you need for the current question.
+
 ### Context window tips
 
+- **Default to `outputFile` for any `--json` output** and process with `jq` — never raw JSON in context.
 - Prefer `--json --fields ...` over wide human-readable tables.
 - Use `--limit` aggressively.
 - Prefer direct lookup by ID over list-then-filter when you already have the identifier.
@@ -147,12 +179,19 @@ sentry({ command: "span list my-org/my-project/abc123def456" });
 
 ### Structured output
 
+Always save JSON to a file and use `jq` to extract what you need:
+
 ```typescript
+// Save to file, then extract with jq
 sentry({
   command:
-    "issue list --json --fields shortId,title,priority,level,status --limit 10",
+    "issue list --json --fields shortId,title,priority,level,status --limit 10 > /tmp/issues.json",
 });
-sentry({ command: "trace view abc123def456 --json" });
+// bash: jq '.' /tmp/issues.json
+
+sentry({ command: "trace view abc123def456 --json > /tmp/trace.json" });
+// bash: jq '.spans | length' /tmp/trace.json
+// bash: jq '.spans[] | {op, description, status}' /tmp/trace.json
 ```
 
 ### Browser views
@@ -193,6 +232,7 @@ Use common display types unless the user explicitly wants a specialized or inter
 - Do not use numeric issue IDs when the user has a short ID like `PROJ-123`.
 - Do not pre-authenticate unless you actually need to change accounts or diagnose auth.
 - Do not skip `--json` when you need to parse the result.
+- Do not dump raw `--json` output into the context — always save to a file and use `jq`.
 - Do not force explicit org and project flags when auto-detection is likely to work.
 - Do not treat `--query` as free text. It uses Sentry search syntax.
 - Do not teach `--since`; use `--period` or `-t`.

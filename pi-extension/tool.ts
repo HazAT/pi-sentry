@@ -4,6 +4,8 @@ import { Container, Text, truncateToWidth } from "@mariozechner/pi-tui";
 import { Type } from "@sinclair/typebox";
 import type { SentryCLI } from "./sentry-cli.ts";
 import { isAuthError, formatSentryDuration } from "./helpers.ts";
+import { writeFile } from "node:fs/promises";
+import { resolve } from "node:path";
 
 type SentryRenderState = {
   startedAt: number | undefined;
@@ -25,7 +27,7 @@ export function createSentryTool(cli: SentryCLI) {
       "Before using the sentry tool, load the `sentry` skill once for full usage guidance, workflows, and examples.",
       "If the user asks to check Sentry, inspect traces, issues, spans, logs, dashboards, or events, invoke the `sentry` skill before the first sentry tool call.",
       "The sentry tool runs Sentry CLI commands. Pass the full command after 'sentry', e.g. sentry({ command: \"issue list --limit 5 --json\" })",
-      "Use --json flag for machine-readable output when you need to parse results",
+      "Use --json flag for machine-readable output when you need to parse results. For large JSON, use outputFile to write to a file instead of context, then process with jq.",
       "Use --fields to limit output columns and reduce noise",
       "Common commands: auth status, issue list, issue view <id>, trace list, trace view <id>, span list, log list, auth login",
     ],
@@ -34,9 +36,15 @@ export function createSentryTool(cli: SentryCLI) {
         description:
           "Sentry CLI command (everything after 'sentry'). Examples: 'issue list --limit 5', 'trace view <id> --json', 'auth status'",
       }),
+      outputFile: Type.Optional(
+        Type.String({
+          description:
+            "Write output to this file instead of returning it in context. Useful for large JSON responses — use jq to process the file afterwards. Path is resolved relative to cwd.",
+        }),
+      ),
     }),
 
-    renderCall(args: { command: string }, theme: Theme, context: any) {
+    renderCall(args: { command: string; outputFile?: string }, theme: Theme, context: any) {
       const state = context.state as Partial<SentryRenderState>;
       if (context.executionStarted && state.startedAt === undefined) {
         state.startedAt = Date.now();
@@ -44,7 +52,8 @@ export function createSentryTool(cli: SentryCLI) {
       }
       const text = (context.lastComponent as Text) ?? new Text("", 0, 0);
       const command = args?.command ?? "...";
-      text.setText(theme.fg("toolTitle", theme.bold(`▲ sentry ${command}`)));
+      const suffix = args?.outputFile ? ` → ${args.outputFile}` : "";
+      text.setText(theme.fg("toolTitle", theme.bold(`▲ sentry ${command}${suffix}`)));
       return text;
     },
 
@@ -107,7 +116,7 @@ export function createSentryTool(cli: SentryCLI) {
 
     async execute(
       _toolCallId: string,
-      params: { command: string },
+      params: { command: string; outputFile?: string },
       signal: AbortSignal | undefined,
     ) {
       const result = await cli.run(params.command, { timeout: 30_000 });
@@ -145,6 +154,17 @@ export function createSentryTool(cli: SentryCLI) {
 
         const retryResult = await cli.run(params.command, { timeout: 30_000 });
         const retryOutput = [retryResult.stdout, retryResult.stderr].filter(Boolean).join("\n");
+
+        if (params.outputFile && retryResult.code === 0) {
+          const fileResult = await writeOutputToFile(params.outputFile, retryOutput);
+          parts.push(fileResult.content[0].text);
+          return {
+            content: [{ type: "text" as const, text: parts.join("\n") }],
+            isError: false,
+            details: undefined,
+          };
+        }
+
         parts.push(retryOutput || "(no output)");
 
         return {
@@ -154,6 +174,10 @@ export function createSentryTool(cli: SentryCLI) {
         };
       }
 
+      if (params.outputFile && result.code === 0) {
+        return writeOutputToFile(params.outputFile, output);
+      }
+
       return {
         content: [{ type: "text" as const, text: output || "(no output)" }],
         isError: result.code !== 0,
@@ -161,4 +185,41 @@ export function createSentryTool(cli: SentryCLI) {
       };
     },
   };
+}
+
+async function writeOutputToFile(
+  filePath: string,
+  output: string,
+): Promise<{ content: { type: "text"; text: string }[]; isError: boolean; details: undefined }> {
+  const resolved = resolve(filePath);
+  try {
+    await writeFile(resolved, output, "utf-8");
+    const lines = output.split("\n").length;
+    const bytes = Buffer.byteLength(output, "utf-8");
+    const size =
+      bytes >= 1024 * 1024
+        ? `${(bytes / (1024 * 1024)).toFixed(1)}MB`
+        : `${(bytes / 1024).toFixed(1)}KB`;
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Output written to ${resolved} (${lines} lines, ${size}). Use bash to process it, e.g.:\n  jq '.[] | .title' ${resolved}`,
+        },
+      ],
+      isError: false,
+      details: undefined,
+    };
+  } catch (err) {
+    return {
+      content: [
+        {
+          type: "text" as const,
+          text: `Failed to write to ${resolved}: ${String(err)}\n\n${output}`,
+        },
+      ],
+      isError: true,
+      details: undefined,
+    };
+  }
 }
