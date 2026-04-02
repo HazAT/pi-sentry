@@ -372,8 +372,9 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     }
   });
 
-  pi.on("message_end", (event) => {
+  pi.on("message_end", (event, ctx) => {
     try {
+      tracer.setContextUsage(ctx.getContextUsage());
       tracer.onMessageEnd(event);
     } catch (error) {
       Sentry.captureException(error);
@@ -387,8 +388,9 @@ export default async function piSentryMonitor(pi: ExtensionAPI) {
     tracer.onTurnStart(event);
   });
 
-  pi.on("turn_end", async () => {
+  pi.on("turn_end", async (_event, ctx) => {
     try {
+      tracer.setContextUsage(ctx.getContextUsage());
       const shouldFlush = tracer.onTurnEnd();
       if (!shouldFlush) return;
 

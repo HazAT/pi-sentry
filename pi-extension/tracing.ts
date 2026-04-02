@@ -6,6 +6,12 @@ import { setSpanStatus, attachTokenUsage, isAssistantMessage } from "./helpers.t
 
 type SentrySpan = ReturnType<typeof Sentry.startInactiveSpan>;
 
+export interface ContextUsageSnapshot {
+  tokens: number | null;
+  contextWindow: number;
+  percent: number | null;
+}
+
 export class SessionTracer {
   private sessionSpan: SentrySpan | undefined;
   private modelId = "unknown";
@@ -22,6 +28,7 @@ export class SessionTracer {
   private turnIndex = 0;
   private _previousTraceId: string | undefined;
   private turnHadToolCalls = false;
+  private lastContextUsage: ContextUsageSnapshot | undefined;
 
   pendingSpanCount = 0;
 
@@ -121,6 +128,21 @@ export class SessionTracer {
       const aggregateTotal = this.aggregateInputTokens + this.aggregateOutputTokens;
       if (aggregateTotal > 0) {
         this.sessionSpan.setAttribute("gen_ai.usage.total_tokens", aggregateTotal);
+      }
+      if (this.lastContextUsage) {
+        this.sessionSpan.setAttribute(
+          "gen_ai.context.window_size",
+          this.lastContextUsage.contextWindow,
+        );
+        if (this.lastContextUsage.tokens !== null) {
+          this.sessionSpan.setAttribute("gen_ai.context.tokens", this.lastContextUsage.tokens);
+        }
+        if (this.lastContextUsage.percent !== null) {
+          this.sessionSpan.setAttribute(
+            "gen_ai.context.utilization",
+            this.lastContextUsage.percent / 100,
+          );
+        }
       }
     }
 
@@ -308,6 +330,16 @@ export class SessionTracer {
     this.aggregateInputTokens += totalInput;
     this.aggregateOutputTokens += totalOutput;
 
+    if (this.lastContextUsage) {
+      usageSpan.setAttribute("gen_ai.context.window_size", this.lastContextUsage.contextWindow);
+      if (this.lastContextUsage.tokens !== null) {
+        usageSpan.setAttribute("gen_ai.context.tokens", this.lastContextUsage.tokens);
+      }
+      if (this.lastContextUsage.percent !== null) {
+        usageSpan.setAttribute("gen_ai.context.utilization", this.lastContextUsage.percent / 100);
+      }
+    }
+
     if (this.config.recordInputs && this.lastUserPrompt) {
       const inputMessages = JSON.stringify([{ role: "user", content: this.lastUserPrompt }]);
       usageSpan.setAttribute(
@@ -388,6 +420,12 @@ export class SessionTracer {
           unit: "token",
         });
       }
+    }
+  }
+
+  setContextUsage(usage: ContextUsageSnapshot | undefined): void {
+    if (usage) {
+      this.lastContextUsage = usage;
     }
   }
 
