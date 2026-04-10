@@ -1,9 +1,100 @@
 ---
 name: sentry
-description: Guide for using the Sentry CLI to inspect issues, events, traces, spans, logs, dashboards, organizations, projects, and authenticated API data from this repo via the `sentry` tool.
+description: Guide for using the Sentry CLI to inspect issues, events, traces, spans, logs, dashboards, organizations, projects, and authenticated API data from this repo via the `sentry` tool. Also covers setting up Sentry SDKs by fetching expert setup guides from skills.sentry.dev. Use when asked to "set up Sentry", "install Sentry", "add Sentry to my project", "configure Sentry", or "add error monitoring".
 ---
 
 # Sentry Skill
+
+This skill covers two capabilities:
+1. **Querying Sentry** — use the `sentry` tool to inspect issues, traces, spans, logs, and dashboards
+2. **Setting up Sentry SDKs** — fetch expert setup guides from the [Sentry Skills Registry](https://skills.sentry.dev/) to install and configure Sentry in any project
+
+---
+
+## Setting Up Sentry in a Project
+
+When the user asks to **set up Sentry**, **install Sentry**, **add error monitoring**, **configure Sentry for [platform]**, or anything related to SDK installation and configuration — fetch the appropriate skill from the Sentry Skills Registry.
+
+### How to fetch skills
+
+Use `curl -sL` to download the full skill markdown. Do **not** use web fetch tools that summarize content — these skills are detailed 10–20 KB files where every line matters.
+
+```bash
+# Fetch the SDK index (detects platform, routes to the right SDK skill)
+curl -sL https://skills.sentry.dev/sdks
+
+# Fetch a specific SDK skill directly
+curl -sL https://skills.sentry.dev/<skill-name>/SKILL.md
+```
+
+### Entry points
+
+| Need | URL |
+|---|---|
+| Detect platform and install SDK | `https://skills.sentry.dev/sdks` |
+| Debug issues, review code, upgrade SDKs | `https://skills.sentry.dev/workflows` |
+| AI monitoring, alerts, OpenTelemetry | `https://skills.sentry.dev/features` |
+| Full index of all skills | `https://skills.sentry.dev/` |
+
+### SDK skills by platform
+
+| Platform | Fetch URL |
+|---|---|
+| Android | `https://skills.sentry.dev/sentry-android-sdk/SKILL.md` |
+| Browser JavaScript | `https://skills.sentry.dev/sentry-browser-sdk/SKILL.md` |
+| Cloudflare Workers/Pages | `https://skills.sentry.dev/sentry-cloudflare-sdk/SKILL.md` |
+| Apple (iOS, macOS, tvOS, etc.) | `https://skills.sentry.dev/sentry-cocoa-sdk/SKILL.md` |
+| .NET | `https://skills.sentry.dev/sentry-dotnet-sdk/SKILL.md` |
+| Elixir | `https://skills.sentry.dev/sentry-elixir-sdk/SKILL.md` |
+| Flutter / Dart | `https://skills.sentry.dev/sentry-flutter-sdk/SKILL.md` |
+| Go | `https://skills.sentry.dev/sentry-go-sdk/SKILL.md` |
+| NestJS | `https://skills.sentry.dev/sentry-nestjs-sdk/SKILL.md` |
+| Next.js | `https://skills.sentry.dev/sentry-nextjs-sdk/SKILL.md` |
+| Node.js / Bun / Deno | `https://skills.sentry.dev/sentry-node-sdk/SKILL.md` |
+| PHP | `https://skills.sentry.dev/sentry-php-sdk/SKILL.md` |
+| Python | `https://skills.sentry.dev/sentry-python-sdk/SKILL.md` |
+| React Native / Expo | `https://skills.sentry.dev/sentry-react-native-sdk/SKILL.md` |
+| React | `https://skills.sentry.dev/sentry-react-sdk/SKILL.md` |
+| Ruby | `https://skills.sentry.dev/sentry-ruby-sdk/SKILL.md` |
+| Svelte / SvelteKit | `https://skills.sentry.dev/sentry-svelte-sdk/SKILL.md` |
+
+### Workflow and feature skills
+
+| Skill | Fetch URL |
+|---|---|
+| Fix issues from Sentry (MCP) | `https://skills.sentry.dev/sentry-fix-issues/SKILL.md` |
+| Resolve Sentry PR code review comments | `https://skills.sentry.dev/sentry-code-review/SKILL.md` |
+| Review PRs for Seer bug predictions | `https://skills.sentry.dev/sentry-pr-code-review/SKILL.md` |
+| Upgrade Sentry JS SDK | `https://skills.sentry.dev/sentry-sdk-upgrade/SKILL.md` |
+| Create Sentry alerts | `https://skills.sentry.dev/sentry-create-alert/SKILL.md` |
+| OpenTelemetry Collector setup | `https://skills.sentry.dev/sentry-otel-exporter-setup/SKILL.md` |
+| AI agent monitoring | `https://skills.sentry.dev/sentry-setup-ai-monitoring/SKILL.md` |
+
+### Platform detection
+
+When the user doesn't specify a platform, detect it from project files:
+- `package.json` with `next` → Next.js
+- `package.json` with `@nestjs/core` → NestJS
+- `package.json` with `react-native` → React Native
+- `package.json` with `react` (no framework) → React
+- `package.json` (plain Node/Bun/Deno) → Node.js
+- `build.gradle` with android plugin → Android
+- `Podfile` or `*.xcodeproj` → Apple/Cocoa
+- `pubspec.yaml` → Flutter
+- `requirements.txt` / `pyproject.toml` → Python
+- `go.mod` → Go
+- `Gemfile` → Ruby
+- `composer.json` → PHP
+- `mix.exs` → Elixir
+- `*.csproj` / `*.sln` → .NET
+- `wrangler.toml` → Cloudflare
+- `svelte.config.js` → Svelte
+
+Fetch the matching SDK skill and follow its instructions step by step. If no match, direct the user to [Sentry Docs](https://docs.sentry.io/platforms/).
+
+---
+
+## Querying Sentry Data
 
 Use the `sentry` tool to run the Sentry CLI. The `command` value is exactly what you would type after `sentry` on the command line.
 
